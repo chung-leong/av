@@ -36,13 +36,42 @@ extern zend_module_entry av_module_entry;
 #include "TSRM.h"
 #endif
 
+#include <avcodec.h>
+#include <avformat.h>
+
+typedef struct av_encoder av_encoder;
+typedef struct av_decoder av_decoder;
+
+struct av_encoder {
+	AVFormatContext *format_cxt;
+	AVOutputFormat *format;
+	AVCodecContext *video_codec_cxt;
+	AVCodec *video_codec;
+	AVCodecContext *audio_codec_cxt;
+	AVCodec *audio_codec;
+};
+
+struct av_decoder {
+	AVFormatContext *format_cxt;
+	AVInputFormat *format;
+	AVCodecContext *video_codec_cxt;
+	AVCodec *video_codec;
+	int video_stream_number;
+	AVCodecContext *audio_codec_cxt;
+	AVCodec *audio_codec;
+	int audio_stream_number;
+};
+
 PHP_MINIT_FUNCTION(av);
 PHP_MSHUTDOWN_FUNCTION(av);
 PHP_RINIT_FUNCTION(av);
 PHP_RSHUTDOWN_FUNCTION(av);
 PHP_MINFO_FUNCTION(av);
 
-PHP_FUNCTION(confirm_av_compiled);	/* For testing, remove later. */
+PHP_FUNCTION(av_encoder_create);
+PHP_FUNCTION(av_decoder_create);
+PHP_FUNCTION(av_decoder_destroy);
+PHP_FUNCTION(av_encoder_destroy);
 
 /* 
   	Declare any global variables you may need between the BEGIN

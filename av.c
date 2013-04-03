@@ -12,7 +12,7 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:                                                              |
+  | Author: Chung Leong <cleong@cal.berkeley.edu>                        |
   +----------------------------------------------------------------------+
 */
 
@@ -32,14 +32,18 @@ ZEND_DECLARE_MODULE_GLOBALS(av)
 */
 
 /* True global resources - no need for thread safety here */
-static int le_av;
+static int le_av_enc;
+static int le_av_dec;
 
 /* {{{ av_functions[]
  *
  * Every user visible function must have an entry in av_functions[].
  */
 const zend_function_entry av_functions[] = {
-	PHP_FE(confirm_av_compiled,	NULL)		/* For testing, remove later. */
+	PHP_FE(av_encoder_create,	NULL)
+	PHP_FE(av_decoder_create,	NULL)
+	PHP_FE(av_encoder_destroy,	NULL)
+	PHP_FE(av_decoder_destroy,	NULL)
 	PHP_FE_END	/* Must be the last line in av_functions[] */
 };
 /* }}} */
@@ -89,6 +93,42 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 */
 /* }}} */
 
+/* {{{ php_free_av_encoder
+ */
+static void php_free_av_encoder(zend_rsrc_list_entry *rsrc TSRMLS_DC)
+{
+	av_encoder *enc = rsrc->ptr;
+	if(enc->video_codec_cxt) {
+		avcodec_close(enc->video_codec_cxt);
+	}
+	if(enc->audio_codec_cxt) {
+		avcodec_close(enc->audio_codec_cxt);
+	}
+	if(enc->format_cxt) {
+		avformat_close_input(&enc->format_cxt);
+	}
+	efree(enc);
+}
+/* }}} */
+
+/* {{{ php_free_av_decoder
+ */
+static void php_free_av_decoder(zend_rsrc_list_entry *rsrc TSRMLS_DC)
+{
+	av_decoder *dec = rsrc->ptr;
+	if(dec->video_codec_cxt) {
+		avcodec_close(dec->video_codec_cxt);
+	}
+	if(dec->audio_codec_cxt) {
+		avcodec_close(dec->audio_codec_cxt);
+	}
+	if(dec->format_cxt) {
+		avformat_close_input(&dec->format_cxt);
+	}
+	efree(dec);
+}
+/* }}} */
+
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(av)
@@ -96,6 +136,12 @@ PHP_MINIT_FUNCTION(av)
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
+	av_register_all();
+	avcodec_register_all();
+
+	le_av_enc = zend_register_list_destructors_ex(php_free_av_encoder, NULL, "av encoder", module_number);
+	le_av_dec = zend_register_list_destructors_ex(php_free_av_decoder, NULL, "av decoder", module_number);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -133,8 +179,31 @@ PHP_RSHUTDOWN_FUNCTION(av)
  */
 PHP_MINFO_FUNCTION(av)
 {
+    AVOutputFormat *ofmt = NULL;
+    AVInputFormat *ifmt = NULL;
+    AVCodec *codec = NULL;
+
 	php_info_print_table_start();
 	php_info_print_table_header(2, "av support", "enabled");
+	php_info_print_table_end();
+
+	php_info_print_table_start();
+	php_info_print_table_colspan_header(4, "Output formats");
+	php_info_print_table_header(4, "Name", "Short name", "MIME type", "Extensions");
+    while((ofmt = av_oformat_next(ofmt))) {
+    	php_info_print_table_row(4, ofmt->long_name, ofmt->name, ofmt->mime_type, ofmt->extensions);
+    }
+	php_info_print_table_colspan_header(3, "Input formats");
+	php_info_print_table_header(3, "Name", "Short name", "Extensions");
+    while((ifmt = av_iformat_next(ifmt))) {
+    	php_info_print_table_row(3, ifmt->long_name, ifmt->name, ifmt->extensions);
+    }
+	php_info_print_table_colspan_header(2, "Codecs");
+	php_info_print_table_header(2, "Name", "Short name");
+    while((codec = av_codec_next(codec))) {
+    	php_info_print_table_row(2, codec->long_name, codec->name);
+    }
+
 	php_info_print_table_end();
 
 	/* Remove comments if you have entries in php.ini
@@ -149,22 +218,81 @@ PHP_MINFO_FUNCTION(av)
    purposes. */
 
 /* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string confirm_av_compiled(string arg)
-   Return a string to confirm that the module is compiled in */
-PHP_FUNCTION(confirm_av_compiled)
+/* {{{ proto string av_encoder_create(string arg)
+   Create an encoder */
+PHP_FUNCTION(av_encoder_create)
 {
-	char *arg = NULL;
-	int arg_len, len;
-	char *strg;
+}
+/* }}} */
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &arg, &arg_len) == FAILURE) {
+/* {{{ proto string av_encoder_create(string arg)
+   Create a decoder */
+PHP_FUNCTION(av_decoder_create)
+{
+	char *filename;
+	int filename_len;
+	zval *params;
+	av_decoder *dec;
+	int stream;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|z", &filename, &filename_len, &params) == FAILURE) {
 		return;
 	}
 
-	len = spprintf(&strg, 0, "Congratulations! You have successfully modified ext/%.78s/config.m4. Module %.78s is now compiled into PHP.", "av", arg);
-	RETURN_STRINGL(strg, len, 0);
+	dec = emalloc(sizeof(av_decoder));
+	memset(dec, 0, sizeof(av_decoder));
+	if (avformat_open_input(&dec->format_cxt, filename, NULL, NULL) < 0) {
+		RETURN_FALSE
+	}
+	if (avformat_find_stream_info(dec->format_cxt, NULL) < 0) {
+		RETURN_FALSE
+	}
+	stream = av_find_best_stream(dec->format_cxt, AVMEDIA_TYPE_VIDEO, -1, -1, &dec->video_codec, 0);
+	if (stream < 0) {
+		RETURN_FALSE
+	}
+	dec->video_stream_number = stream;
+	dec->video_codec_cxt = avcodec_alloc_context3(dec->video_codec);
+	if (avcodec_open2(dec->video_codec_cxt, dec->video_codec, NULL) < 0) {
+		RETURN_FALSE
+	}
+
+	ZEND_REGISTER_RESOURCE(return_value, dec, le_av_dec);
 }
 /* }}} */
+
+/* {{{ proto string av_encoder_create(string arg)
+   Free an encoder */
+PHP_FUNCTION(av_encoder_destroy)
+{
+	zval *params;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &params) == FAILURE) {
+		return;
+	}
+
+}
+/* }}} */
+
+/* {{{ proto string av_encoder_create(string arg)
+   Create a encoder */
+PHP_FUNCTION(av_decoder_destroy)
+{
+	zval *res;
+	av_decoder *dec;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &res) == FAILURE) {
+		return;
+	}
+
+	ZEND_FETCH_RESOURCE(dec, av_decoder *, &res, -1, "Decoder", le_av_dec);
+
+	zend_list_delete(Z_LVAL_P(res));
+
+	RETURN_TRUE;
+}
+/* }}} */
+
 /* The previous line is meant for vim and emacs, so it can correctly fold and 
    unfold functions in source code. See the corresponding marks just before 
    function definition, where the functions purpose is also documented. Please 
