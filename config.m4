@@ -17,11 +17,12 @@ if test "$PHP_AV" != "no"; then
       if test -r $i/$SEARCH_FOR; then
         AV_DIR=$i
         AC_MSG_RESULT(found in $i)
-	PHP_ADD_INCLUDE($i/include/libavcodec/)
-	PHP_ADD_INCLUDE($i/include/libavformat/)
-	PHP_ADD_INCLUDE($i/include/libavutil/)
-	PHP_ADD_INCLUDE($i/include/libavfilter/)
-	PHP_ADD_INCLUDE($i/include/libavdevice/)      
+        PHP_ADD_INCLUDE($i/include/libavcodec/)
+        PHP_ADD_INCLUDE($i/include/libavformat/)
+        PHP_ADD_INCLUDE($i/include/libavutil/)
+        PHP_ADD_INCLUDE($i/include/libavfilter/)
+        PHP_ADD_INCLUDE($i/include/libswscale/)      
+        PHP_ADD_INCLUDE($i/include/libavdevice/)      
       fi
     done
   fi
@@ -46,6 +47,16 @@ if test "$PHP_AV" != "no"; then
   PHP_CHECK_LIBRARY(avformat,avio_open,
   [
     PHP_ADD_LIBRARY_WITH_PATH(avformat, $AV_DIR/lib, AV_SHARED_LIBADD)
+    AC_DEFINE(HAVE_AVLIB,1,[ ])
+  ],[
+    AC_MSG_ERROR([wrong libavformat lib version or lib not found])
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
+
+  PHP_CHECK_LIBRARY(avutil,av_dict_get,
+  [
+    PHP_ADD_LIBRARY_WITH_PATH(avutil, $AV_DIR/lib, AV_SHARED_LIBADD)
     AC_DEFINE(HAVE_AVLIB,1,[ ])
   ],[
     AC_MSG_ERROR([wrong libavformat lib version or lib not found])
