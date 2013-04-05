@@ -48,8 +48,15 @@ struct av_encoder {
 	AVOutputFormat *format;
 	AVCodecContext *video_codec_cxt;
 	AVCodec *video_codec;
+	AVStream *video_stream;
 	AVCodecContext *audio_codec_cxt;
 	AVCodec *audio_codec;
+	AVStream *audio_stream;
+	AVFrame *frame;
+	AVFrame *rgb_frame;
+	uint8_t *video_buffer;
+	int32_t video_buffer_size;
+	struct SwsContext *scalar_cxt;
 };
 
 struct av_decoder {
@@ -61,10 +68,10 @@ struct av_decoder {
 	AVCodecContext *audio_codec_cxt;
 	AVCodec *audio_codec;
 	AVStream *audio_stream;
-	AVFrame *rgb_frame;
 	AVFrame *frame;
+	AVFrame *rgb_frame;
 	AVPacket packet;
-	size_t packet_bytes_remaining;
+	int32_t packet_bytes_remaining;
 	struct SwsContext *scalar_cxt;
 };
 
@@ -76,6 +83,8 @@ PHP_MINFO_FUNCTION(av);
 
 PHP_FUNCTION(av_encoder_create);
 PHP_FUNCTION(av_encoder_destroy);
+PHP_FUNCTION(av_encoder_add_frame);
+
 PHP_FUNCTION(av_decoder_create);
 PHP_FUNCTION(av_decoder_destroy);
 PHP_FUNCTION(av_decoder_extract_frame);

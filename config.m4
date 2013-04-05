@@ -17,16 +17,17 @@ if test "$PHP_AV" != "no"; then
       if test -r $i/$SEARCH_FOR; then
         AV_DIR=$i
         AC_MSG_RESULT(found in $i)
-        PHP_ADD_INCLUDE($i/include/libavcodec/)
-        PHP_ADD_INCLUDE($i/include/libavformat/)
-        PHP_ADD_INCLUDE($i/include/libavutil/)
-        PHP_ADD_INCLUDE($i/include/libavfilter/)
-        PHP_ADD_INCLUDE($i/include/libswscale/)      
-        PHP_ADD_INCLUDE($i/include/libavdevice/)      
       fi
     done
   fi
   
+  PHP_ADD_INCLUDE($AV_DIR/include/libavcodec/)
+  PHP_ADD_INCLUDE($AV_DIR/include/libavformat/)
+  PHP_ADD_INCLUDE($AV_DIR/include/libavutil/)
+  PHP_ADD_INCLUDE($AV_DIR/include/libavfilter/)
+  PHP_ADD_INCLUDE($AV_DIR/include/libswscale/)      
+  PHP_ADD_INCLUDE($AV_DIR/include/libavdevice/)
+              
   if test -z "$AV_DIR"; then
      AC_MSG_RESULT([not found])
      AC_MSG_ERROR([Please reinstall libavcodec distribution])

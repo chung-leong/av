@@ -43,6 +43,7 @@ static int le_gd = -1;
 const zend_function_entry av_functions[] = {
 	PHP_FE(av_encoder_create,			NULL)
 	PHP_FE(av_encoder_destroy,			NULL)
+	PHP_FE(av_encoder_add_frame,		NULL)
 	PHP_FE(av_decoder_create,			NULL)
 	PHP_FE(av_decoder_destroy,			NULL)
 	PHP_FE(av_decoder_extract_frame,	NULL)
@@ -101,13 +102,17 @@ static void php_free_av_encoder(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 {
 	av_encoder *enc = rsrc->ptr;
 	if(enc->video_codec_cxt) {
+	    av_write_trailer(enc->format_cxt);
+		avio_close(enc->format_cxt->pb);
 		avcodec_close(enc->video_codec_cxt);
 	}
 	if(enc->audio_codec_cxt) {
 		avcodec_close(enc->audio_codec_cxt);
 	}
 	if(enc->format_cxt) {
-		avformat_close_input(&enc->format_cxt);
+	}
+	if(enc->video_buffer) {
+		efree(enc->video_buffer);
 	}
 	efree(enc);
 }
@@ -128,7 +133,7 @@ static void php_free_av_decoder(zend_rsrc_list_entry *rsrc TSRMLS_DC)
 		avformat_close_input(&dec->format_cxt);
 	}
 	if(dec->packet.data) {
-		av_free_packet(&dec->packet.data);
+		av_free_packet(&dec->packet);
 	}
 	efree(dec);
 }
@@ -220,18 +225,166 @@ PHP_MINFO_FUNCTION(av)
 }
 /* }}} */
 
-
-/* Remove the following function when you have succesfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
 /* Every user-visible function in PHP should document itself in the source */
 /* {{{ proto string av_encoder_create(string arg)
    Create an encoder */
 PHP_FUNCTION(av_encoder_create)
 {
+	char *filename;
+	int filename_len;
+	zval *params = NULL;
+	av_encoder *enc;
+	AVOutputFormat *format = NULL;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|a", &filename, &filename_len, &params) == FAILURE) {
+		return;
+	}
+
+	if(params) {
+		zval **p_value = NULL;
+		if(zend_hash_find(Z_ARRVAL_P(params), "format", 7, (void **) &p_value) != FAILURE) {
+			if(Z_TYPE_PP(p_value) == IS_STRING) {
+				char *short_name = Z_STRVAL_PP(p_value);
+				format = av_guess_format(short_name, NULL, NULL);
+				if(!format) {
+					php_error_docref(NULL TSRMLS_CC, E_ERROR, "Cannot find output format: %s", short_name);
+					return;
+				}
+			}
+		}
+		if(!format) {
+			if(zend_hash_find(Z_ARRVAL_P(params), "mime", 5, (void **) &p_value) != FAILURE) {
+				if(Z_TYPE_PP(p_value) == IS_STRING) {
+					char *mime_type = Z_STRVAL_PP(p_value);
+					format = av_guess_format(NULL, NULL, mime_type);
+				}
+			}
+		}
+	}
+	if(!format) {
+		format = av_guess_format(NULL, filename, NULL);
+		if(!format) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Cannot deduce output format from filename: %s", filename);
+			return;
+		}
+	}
+
+	enc = emalloc(sizeof(av_encoder));
+	memset(enc, 0, sizeof(av_encoder));
+	enc->format_cxt = avformat_alloc_context();
+	enc->format = format;
+	if(!(format->flags & AVFMT_NOFILE)) {
+		if(avio_open(&enc->format_cxt->pb, filename, AVIO_FLAG_WRITE) < 0) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error opening file for writing: %s", filename);
+			return;
+		}
+	}
+
+	enc->video_codec = avcodec_find_encoder(format->video_codec);
+	enc->video_stream = avformat_new_stream(enc->format_cxt, enc->video_codec);
+	enc->video_codec_cxt = enc->video_stream->codec;
+	enc->video_codec_cxt->width = 320;
+	enc->video_codec_cxt->height = 176;
+	enc->video_codec_cxt->time_base = (AVRational) { 1, 25 };
+	enc->video_codec_cxt->pix_fmt = enc->video_codec->pix_fmts[0];
+	avcodec_open2(enc->video_codec_cxt, enc->video_codec, NULL);
+	enc->frame = enc->video_codec_cxt->coded_frame;
+	avpicture_alloc((AVPicture *) enc->frame, enc->video_codec_cxt->pix_fmt, enc->video_codec_cxt->width, enc->video_codec_cxt->height);
+	enc->video_buffer_size = 100000;
+	enc->video_buffer = emalloc(enc->video_buffer_size);
+
+	enc->format_cxt->video_codec_id = enc->video_codec->id;
+	enc->format_cxt->oformat = format;
+    if(enc->format_cxt->oformat->flags & AVFMT_GLOBALHEADER) {
+    	enc->video_codec_cxt->flags |= CODEC_FLAG_GLOBAL_HEADER;
+    }
+
+    avformat_write_header(enc->format_cxt, NULL);
+
+	ZEND_REGISTER_RESOURCE(return_value, enc, le_av_enc);
 }
 /* }}} */
+
+
+static int av_copy_from_gd_image(av_encoder *enc, gdImagePtr image) {
+	uint32_t i, j;
+	int *gd_pixel;
+	uint8_t *av_pixel;
+
+	if(!enc->rgb_frame || enc->rgb_frame->width != image->sx || enc->rgb_frame->height != image->sy) {
+		if(enc->rgb_frame) {
+			avpicture_free((AVPicture *) enc->rgb_frame);
+		} else {
+			enc->rgb_frame = avcodec_alloc_frame();
+		}
+		avpicture_alloc((AVPicture *) enc->rgb_frame, PIX_FMT_RGBA, image->sx, image->sy);
+		enc->rgb_frame->width = image->sx;
+		enc->rgb_frame->height = image->sy;
+		enc->scalar_cxt = sws_getCachedContext(enc->scalar_cxt, image->sx, image->sy, PIX_FMT_RGBA, enc->video_codec_cxt->width, enc->video_codec_cxt->height, enc->video_codec_cxt->pix_fmt, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+	}
+
+	for(i = 0; i < image->sy; i++) {
+		gd_pixel = image->tpixels[i];
+		av_pixel = enc->rgb_frame->data[0] + enc->rgb_frame->linesize[0] * i;
+		for(j = 0; j < image->sx; j++) {
+			av_pixel[0] = gdTrueColorGetRed(*gd_pixel);
+			av_pixel[1] = gdTrueColorGetGreen(*gd_pixel);
+			av_pixel[2] = gdTrueColorGetBlue(*gd_pixel);
+			av_pixel[3] = (gdAlphaMax - gdTrueColorGetAlpha(*gd_pixel)) << 1;
+			gd_pixel += 1;
+			av_pixel += 4;
+		}
+	}
+
+	sws_scale(enc->scalar_cxt, enc->rgb_frame->data, enc->rgb_frame->linesize, 0, enc->rgb_frame->height, enc->frame->data, enc->frame->linesize);
+	return TRUE;
+}
+
+static int av_encode_next_frame(av_encoder *enc) {
+	int bytes_encoded = avcodec_encode_video(enc->video_codec_cxt, enc->video_buffer, enc->video_buffer_size, enc->frame);
+
+	if(bytes_encoded < 0) {
+		return FALSE;
+	} else if(bytes_encoded > 0) {
+		AVPacket packet;
+		av_init_packet(&packet);
+		if(enc->video_codec_cxt->coded_frame->pts != AV_NOPTS_VALUE) {
+			packet.pts= av_rescale_q(enc->video_codec_cxt->coded_frame->pts, enc->video_codec_cxt->time_base, enc->video_stream->time_base);
+		}
+		if(enc->video_codec_cxt->coded_frame->key_frame) {
+			packet.flags |= AV_PKT_FLAG_KEY;
+		}
+		packet.stream_index = enc->video_stream->index;
+		packet.data = enc->video_buffer;
+		packet.size = enc->video_buffer_size;
+
+		if(av_interleaved_write_frame(enc->format_cxt, &packet) < 0) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+/* {{{ proto string av_encoder_add_frame(string arg)
+   Extract a video frame */
+PHP_FUNCTION(av_encoder_add_frame)
+{
+	zval *res1, *res2;
+	av_encoder *enc;
+	gdImagePtr image;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr", &res1, &res2) == FAILURE) {
+		return;
+	}
+
+	ZEND_FETCH_RESOURCE(enc, av_encoder *, &res1, -1, "Encoder", le_av_enc);
+	ZEND_FETCH_RESOURCE(image, gdImagePtr, &res2, -1, "Image", le_gd);
+
+	av_copy_from_gd_image(enc, image);
+	av_encode_next_frame(enc);
+}
+/* }}} */
+
 
 /* {{{ proto string av_encoder_create(string arg)
    Create a decoder */
@@ -239,12 +392,11 @@ PHP_FUNCTION(av_decoder_create)
 {
 	char *filename;
 	int filename_len;
-	zval *params;
+	zval *params = NULL;
 	av_decoder *dec;
 	int stream_index;
-	AVDictionaryEntry *entry = NULL;;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|z", &filename, &filename_len, &params) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|a", &filename, &filename_len, &params) == FAILURE) {
 		return;
 	}
 
@@ -263,6 +415,7 @@ PHP_FUNCTION(av_decoder_create)
 	dec->format = dec->format_cxt->iformat;
 	dec->video_stream = dec->format_cxt->streams[stream_index];
 	dec->video_codec_cxt = dec->video_stream->codec;
+	dec->frame = avcodec_alloc_frame();
 	if (avcodec_open2(dec->video_codec_cxt, dec->video_codec, NULL) < 0) {
 		RETURN_FALSE
 	}
@@ -273,12 +426,8 @@ PHP_FUNCTION(av_decoder_create)
 }
 /* }}} */
 
-static int av_decode_next_frame(av_decoder *dec, int required_width, int required_height) {
+static int av_decode_next_frame(av_decoder *dec) {
 	int frame_finished = FALSE;
-
-	if(!dec->frame) {
-		dec->frame = avcodec_alloc_frame();
-	}
 
 	while(!frame_finished) {
 		if(dec->packet_bytes_remaining == 0) {
@@ -304,39 +453,26 @@ static int av_decode_next_frame(av_decoder *dec, int required_width, int require
 			dec->packet_bytes_remaining = 0;
 		}
 	}
+	return TRUE;
+}
 
-	if(!dec->rgb_frame || dec->rgb_frame->width != required_width || dec->rgb_frame->height != required_height) {
+static int av_copy_to_gd_image(av_decoder *dec, gdImagePtr image) {
+	uint32_t i, j;
+	int *gd_pixel;
+	uint8_t *av_pixel;
+
+	if(!dec->rgb_frame || dec->rgb_frame->width != image->sx || dec->rgb_frame->height != image->sy) {
 		if(dec->rgb_frame) {
 			avpicture_free((AVPicture *) dec->rgb_frame);
 		} else {
 			dec->rgb_frame = avcodec_alloc_frame();
 		}
-		avpicture_alloc((AVPicture *) dec->rgb_frame, PIX_FMT_RGBA, required_width, required_height);
-		dec->scalar_cxt = sws_getCachedContext(dec->scalar_cxt, dec->video_codec_cxt->width, dec->video_codec_cxt->height, dec->video_codec_cxt->pix_fmt, required_width, required_height, PIX_FMT_RGBA, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+		avpicture_alloc((AVPicture *) dec->rgb_frame, PIX_FMT_RGBA, image->sx, image->sy);
+		dec->rgb_frame->width = image->sx;
+		dec->rgb_frame->height = image->sy;
+		dec->scalar_cxt = sws_getCachedContext(dec->scalar_cxt, dec->video_codec_cxt->width, dec->video_codec_cxt->height, dec->video_codec_cxt->pix_fmt, image->sx, image->sy, PIX_FMT_RGBA, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 	}
 	sws_scale(dec->scalar_cxt, dec->frame->data, dec->frame->linesize, 0, dec->frame->height, dec->rgb_frame->data, dec->rgb_frame->linesize);
-	return TRUE;
-}
-
-/* {{{ proto string av_encoder_create(string arg)
-   Create a decoder */
-PHP_FUNCTION(av_decoder_extract_frame)
-{
-	zval *res1, *res2;
-	av_decoder *dec;
-	gdImagePtr image;
-	uint32_t i, j;
-	int *gd_pixel;
-	uint8_t *av_pixel;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr", &res1, &res2) == FAILURE) {
-		return;
-	}
-
-	ZEND_FETCH_RESOURCE(dec, av_decoder *, &res1, -1, "Decoder", le_av_dec);
-	ZEND_FETCH_RESOURCE(image, gdImagePtr, &res2, -1, "Image", le_gd);
-
-	av_decode_next_frame(dec, image->sx, image->sy);
 
 	for(i = 0; i < image->sy; i++) {
 		gd_pixel = image->tpixels[i];
@@ -351,6 +487,26 @@ PHP_FUNCTION(av_decoder_extract_frame)
 			av_pixel += 4;
 		}
 	}
+	return TRUE;
+}
+
+/* {{{ proto string av_decoder_extract_frame(string arg)
+   Extract a video frame */
+PHP_FUNCTION(av_decoder_extract_frame)
+{
+	zval *res1, *res2;
+	av_decoder *dec;
+	gdImagePtr image;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr", &res1, &res2) == FAILURE) {
+		return;
+	}
+
+	ZEND_FETCH_RESOURCE(dec, av_decoder *, &res1, -1, "Decoder", le_av_dec);
+	ZEND_FETCH_RESOURCE(image, gdImagePtr, &res2, -1, "Image", le_gd);
+
+	av_decode_next_frame(dec);
+	av_copy_to_gd_image(dec, image);
 }
 /* }}} */
 
