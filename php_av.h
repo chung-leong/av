@@ -40,39 +40,51 @@ extern zend_module_entry av_module_entry;
 #include <avformat.h>
 #include <swscale.h>
 
-typedef struct av_encoder av_encoder;
-typedef struct av_decoder av_decoder;
+typedef struct av_file av_file;
+typedef struct av_stream av_stream;
 
-struct av_encoder {
-	AVFormatContext *format_cxt;
-	AVOutputFormat *format;
-	AVCodecContext *video_codec_cxt;
-	AVCodec *video_codec;
-	AVStream *video_stream;
-	AVCodecContext *audio_codec_cxt;
-	AVCodec *audio_codec;
-	AVStream *audio_stream;
+struct av_stream {
+	AVCodecContext *codec_cxt;
+	AVCodec *codec;
+	AVStream *stream;
+	double time_unit;
+	double frame_time;
+	double duration;
+
 	AVFrame *frame;
+
 	AVFrame *rgb_frame;
-	uint8_t *video_buffer;
-	int32_t video_buffer_size;
 	struct SwsContext *scalar_cxt;
+
+	AVPacket *packet;
+	AVPacket *packet_queue;
+	uint32_t packet_bytes_remaining;
+	uint32_t packet_queue_size;
+	uint32_t packet_queue_head;
+	uint32_t packet_queue_tail;
+	uint32_t packet_count;
+
+	av_file *file;
+	uint32_t index;
 };
 
-struct av_decoder {
+enum {
+	AV_FILE_READ 	= 0x0001,
+	AV_FILE_WRITE 	= 0x0002,
+	AV_FILE_APPEND	= 0x0004,
+
+	AV_FILE_FREED	= 0x8000,
+};
+
+struct av_file {
 	AVFormatContext *format_cxt;
-	AVInputFormat *format;
-	AVCodecContext *video_codec_cxt;
-	AVCodec *video_codec;
-	AVStream *video_stream;
-	AVCodecContext *audio_codec_cxt;
-	AVCodec *audio_codec;
-	AVStream *audio_stream;
-	AVFrame *frame;
-	AVFrame *rgb_frame;
-	AVPacket packet;
-	int32_t packet_bytes_remaining;
-	struct SwsContext *scalar_cxt;
+	AVInputFormat *input_format;
+	AVOutputFormat *output_format;
+
+	av_stream *streams;
+	uint32_t stream_count;
+	uint32_t open_stream_count;
+	int32_t flags;
 };
 
 PHP_MINIT_FUNCTION(av);
@@ -81,13 +93,14 @@ PHP_RINIT_FUNCTION(av);
 PHP_RSHUTDOWN_FUNCTION(av);
 PHP_MINFO_FUNCTION(av);
 
-PHP_FUNCTION(av_encoder_create);
-PHP_FUNCTION(av_encoder_destroy);
-PHP_FUNCTION(av_encoder_add_frame);
+PHP_FUNCTION(av_file_open);
+PHP_FUNCTION(av_file_close);
 
-PHP_FUNCTION(av_decoder_create);
-PHP_FUNCTION(av_decoder_destroy);
-PHP_FUNCTION(av_decoder_extract_frame);
+PHP_FUNCTION(av_stream_open);
+PHP_FUNCTION(av_stream_close);
+PHP_FUNCTION(av_stream_clone);
+PHP_FUNCTION(av_stream_read_image);
+PHP_FUNCTION(av_stream_write_image);
 
 /* 
   	Declare any global variables you may need between the BEGIN
