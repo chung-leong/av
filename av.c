@@ -183,7 +183,9 @@ static void av_stream_free(av_stream *strm) {
 		file->open_stream_count--;
 		if(file->open_stream_count == 0) {
 			if(file->flags & AV_FILE_WRITE) {
-				av_write_trailer(file->format_cxt);
+				if(file->flags & AV_FILE_HEADER_WRITTEN) {
+					av_write_trailer(file->format_cxt);
+				}
 			}
 			if(file->flags & AV_FILE_FREED) {
 				// free the file if no zval is referencing it
@@ -533,7 +535,8 @@ PHP_FUNCTION(av_stream_open)
 				codec_id = file->output_format->video_codec;
 				break;
 			case AVMEDIA_TYPE_AUDIO:
-				codec_id = file->output_format->audio_codec;
+				//codec_id = file->output_format->audio_codec;
+				codec_id = CODEC_ID_VORBIS;
 				break;
 			case AVMEDIA_TYPE_SUBTITLE:
 				codec_id = file->output_format->subtitle_codec;
@@ -542,6 +545,10 @@ PHP_FUNCTION(av_stream_open)
 				break;
 		}
 		codec = avcodec_find_encoder(codec_id);
+		if(!codec) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec");
+			return;
+		}
 
 		stream = avformat_new_stream(file->format_cxt, codec);
 		stream_index = stream->index;
@@ -563,8 +570,9 @@ PHP_FUNCTION(av_stream_open)
 				file->format_cxt->audio_codec_id = codec->id;
 				codec_cxt->sample_fmt = AV_SAMPLE_FMT_S16;
 				codec_cxt->sample_rate = 44100;
-				//codec_cxt->channel_layout = codec->channel_layouts[0];
 				codec_cxt->channels = 2;
+				codec_cxt->global_quality = 3540;
+				codec_cxt->flags |= CODEC_FLAG_QSCALE;
 				break;
 			case AVMEDIA_TYPE_SUBTITLE:
 				file->format_cxt->subtitle_codec_id = codec->id;
@@ -578,6 +586,7 @@ PHP_FUNCTION(av_stream_open)
 			return;
 		}
 		frame = codec_cxt->coded_frame;
+		frame->pts = 0;
 	    if(file->output_format->flags & AVFMT_GLOBALHEADER) {
 	    	codec_cxt->flags |= CODEC_FLAG_GLOBAL_HEADER;
 	    }
@@ -596,7 +605,7 @@ PHP_FUNCTION(av_stream_open)
 	strm->codec = codec_cxt->codec;
 	strm->duration = duration;
 	strm->time_unit = time_unit;
-	strm->packet_queue_size = 16;
+	strm->packet_queue_size = 32;
 	strm->packet_queue = emalloc(sizeof(AVPacket) * strm->packet_queue_size);
 	memset(strm->packet_queue, 0, sizeof(AVPacket) * strm->packet_queue_size);
 	strm->file = file;
@@ -655,7 +664,7 @@ static int av_load_next_packet(av_stream *strm) {
 					dst_strm->packet_queue_tail = 0;
 				}
 			} else {
-				if(dst_strm->packet_queue_size > 0) {
+				if(dst_strm && dst_strm->packet_queue_size > 0) {
 					php_error_docref(NULL TSRMLS_CC, E_WARNING, "Dropping packet for stream %d", dst_strm->index);
 				}
 				av_free_packet(&packet);
@@ -716,21 +725,14 @@ static int av_copy_pcm_from_buffer(av_stream *strm, zval *buffer) {
 	int16_t *data = (int16_t *) Z_STRVAL_P(buffer);
 	uint32_t data_len = Z_STRLEN_P(buffer);
 	uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
+    int16_t *samples = av_malloc(buffer_size);
 
-	if(!strm->frame->data[0]) {
-	    uint8_t *samples = av_malloc(buffer_size);
-	    strm->frame->format = strm->codec_cxt->sample_fmt;
-	    strm->frame->nb_samples = strm->codec_cxt->frame_size;
-		avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, samples, buffer_size, 1);
-	}
-	if(data_len <= buffer_size) {
-		memcpy(strm->frame->data[0], data, data_len);
-		if(data_len < buffer_size) {
-			memset(strm->frame->data[0] + data_len, 0, buffer_size - data_len);
-		}
-	} else {
-		memcpy(strm->frame->data[0], data, buffer_size);
-	}
+    avcodec_get_frame_defaults(strm->frame);
+    strm->frame->format = strm->codec_cxt->sample_fmt;
+    strm->frame->nb_samples = strm->codec_cxt->frame_size;
+	avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, (uint8_t *) samples, buffer_size, 1);
+
+	memcpy(strm->frame->data[0], data, (buffer_size < data_len) ? buffer_size : data_len);
 	return TRUE;
 }
 
@@ -789,6 +791,9 @@ static int av_encode_next_frame(av_stream *strm) {
 		if(strm->frame->pts != AV_NOPTS_VALUE) {
 			strm->packet->pts= av_rescale_q(strm->frame->pts, strm->codec_cxt->time_base, strm->stream->time_base);
 		}
+        if(strm->packet->duration > 0) {
+        	strm->packet->duration = av_rescale_q(strm->packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
+        }
 		if(strm->codec_cxt->coded_frame->key_frame) {
 			strm->packet->flags |= AV_PKT_FLAG_KEY;
 		}
@@ -926,7 +931,7 @@ static int av_copy_image_to_gd(av_stream *strm, gdImagePtr image) {
 
 static int av_copy_pcm_to_buffer(av_stream *strm, zval *buffer) {
 	int16_t *data = (int16_t *) strm->frame->data[0];
-	uint32_t data_len = sizeof(int16_t) * strm->frame->linesize[0];
+	uint32_t data_len = strm->frame->linesize[0];
 	if(Z_TYPE_P(buffer) == IS_STRING) {
 		Z_STRVAL_P(buffer) = erealloc(Z_STRVAL_P(buffer), data_len + 1);
 	} else {
