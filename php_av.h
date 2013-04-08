@@ -85,7 +85,7 @@ struct av_file {
 	AVInputFormat *input_format;
 	AVOutputFormat *output_format;
 
-	av_stream *streams;
+	av_stream **streams;
 	uint32_t stream_count;
 	uint32_t open_stream_count;
 	int32_t flags;
@@ -103,7 +103,13 @@ PHP_FUNCTION(av_file_close);
 PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
 PHP_FUNCTION(av_stream_read_image);
+PHP_FUNCTION(av_stream_read_pcm);
+PHP_FUNCTION(av_stream_read_raw);
 PHP_FUNCTION(av_stream_write_image);
+PHP_FUNCTION(av_stream_write_pcm);
+PHP_FUNCTION(av_stream_write_raw);
+PHP_FUNCTION(av_stream_get_time);
+PHP_FUNCTION(av_stream_get_duration);
 
 ZEND_BEGIN_MODULE_GLOBALS(av)
 	uint8_t *video_buffer;
