@@ -53,7 +53,7 @@ struct av_stream {
 
 	AVFrame *frame;
 
-	AVFrame *rgb_frame;
+	AVFrame *picture;
 	struct SwsContext *scalar_cxt;
 
 	AVPacket *packet;
@@ -66,14 +66,18 @@ struct av_stream {
 
 	av_file *file;
 	uint32_t index;
+
+	int32_t flags;
 };
 
 enum {
-	AV_FILE_READ 	= 0x0001,
-	AV_FILE_WRITE 	= 0x0002,
-	AV_FILE_APPEND	= 0x0004,
+	AV_FILE_READ 				= 0x0001,
+	AV_FILE_WRITE 				= 0x0002,
+	AV_FILE_APPEND				= 0x0004,
 
-	AV_FILE_FREED	= 0x8000,
+	AV_FILE_HEADER_WRITTEN		= 0x2000,
+	AV_FILE_LOCKED				= 0x4000,
+	AV_FILE_FREED				= 0x8000,
 };
 
 struct av_file {
@@ -98,29 +102,13 @@ PHP_FUNCTION(av_file_close);
 
 PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
-PHP_FUNCTION(av_stream_clone);
 PHP_FUNCTION(av_stream_read_image);
 PHP_FUNCTION(av_stream_write_image);
 
-/* 
-  	Declare any global variables you may need between the BEGIN
-	and END macros here:     
-
 ZEND_BEGIN_MODULE_GLOBALS(av)
-	long  global_value;
-	char *global_string;
+	uint8_t *video_buffer;
+	uint32_t video_buffer_size;
 ZEND_END_MODULE_GLOBALS(av)
-*/
-
-/* In every utility function you add that needs to use variables 
-   in php_av_globals, call TSRMLS_FETCH(); after declaring other 
-   variables used by that function, or better yet, pass in TSRMLS_CC
-   after the last function argument and declare your utility function
-   with TSRMLS_DC after the last declared argument.  Always refer to
-   the globals in your function as AV_G(variable).  You are 
-   encouraged to rename these macros something shorter, see
-   examples in any other php module directory.
-*/
 
 #ifdef ZTS
 #define AV_G(v) TSRMG(av_globals_id, zend_av_globals *, v)
