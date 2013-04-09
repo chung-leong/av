@@ -47,21 +47,17 @@ struct av_stream {
 	AVCodecContext *codec_cxt;
 	AVCodec *codec;
 	AVStream *stream;
-	double time_unit;
-	double frame_time;
-	double duration;
 
 	AVFrame *frame;
+	int64_t frame_pts;
 
 	AVFrame *picture;
 	struct SwsContext *scalar_cxt;
 
 	AVPacket *packet;
-	AVPacket *packet_queue;
+	AVPacket **packet_queue;
 	uint32_t packet_bytes_remaining;
 	uint32_t packet_queue_size;
-	uint32_t packet_queue_head;
-	uint32_t packet_queue_tail;
 	uint32_t packet_count;
 
 	av_file *file;
@@ -75,6 +71,7 @@ enum {
 	AV_FILE_WRITE 				= 0x0002,
 	AV_FILE_APPEND				= 0x0004,
 
+	AV_FILE_EOF_REACHED			= 0x1000,
 	AV_FILE_HEADER_WRITTEN		= 0x2000,
 	AV_FILE_LOCKED				= 0x4000,
 	AV_FILE_FREED				= 0x8000,
@@ -99,6 +96,7 @@ PHP_MINFO_FUNCTION(av);
 
 PHP_FUNCTION(av_file_open);
 PHP_FUNCTION(av_file_close);
+PHP_FUNCTION(av_file_eof);
 
 PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
@@ -108,7 +106,6 @@ PHP_FUNCTION(av_stream_read_raw);
 PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_write_raw);
-PHP_FUNCTION(av_stream_get_time);
 PHP_FUNCTION(av_stream_get_duration);
 
 ZEND_BEGIN_MODULE_GLOBALS(av)
