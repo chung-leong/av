@@ -48,20 +48,25 @@ struct av_stream {
 	AVCodec *codec;
 	AVStream *stream;
 
-	AVFrame *frame;
-	int64_t frame_pts;
+	AVFrame *frame;						// the current frame
+	int64_t frame_pts;					// the PTS of the packet that triggered the creation of the frame (used during decoding only)
 
-	AVFrame *picture;
-	struct SwsContext *scalar_cxt;
+	AVFrame *picture;					// RGBA picture
+	struct SwsContext *scalar_cxt;		// scalar context
 
-	AVPacket *packet;
-	AVPacket **packet_queue;
-	uint32_t packet_bytes_remaining;
-	uint32_t packet_queue_size;
-	uint32_t packet_count;
+	short *samples;						// PCM data after resampling
+	uint32_t sample_count;				// the number of samples currently buffered
+	uint32_t sample_buffer_size;		// the number of samples in an audio frame
+	ReSampleContext *resampler_cxt;		// resampler context
 
-	av_file *file;
-	uint32_t index;
+	AVPacket *packet;					// the current packet
+	AVPacket **packet_queue;			// packets for this stream waiting to be decoded or written to disk
+	uint32_t packet_queue_size;			// length of the queue
+	uint32_t packet_count;				// the number of packets in the queue
+	uint32_t packet_bytes_remaining;	// the number of bytes remaining in current packet (used during decoding only)
+
+	av_file *file;						// AV file containing this stream
+	uint32_t index;						// index of this stream
 
 	int32_t flags;
 };
@@ -102,10 +107,8 @@ PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
 PHP_FUNCTION(av_stream_read_image);
 PHP_FUNCTION(av_stream_read_pcm);
-PHP_FUNCTION(av_stream_read_raw);
 PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
-PHP_FUNCTION(av_stream_write_raw);
 PHP_FUNCTION(av_stream_get_duration);
 
 ZEND_BEGIN_MODULE_GLOBALS(av)
