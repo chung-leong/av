@@ -807,7 +807,8 @@ static void av_transfer_picture_from_frame(av_stream *strm) {
 }
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
-	if(strm->frame->data[0]) {
+	// allocate the audio frame if it's not there
+	if(!strm->frame->data[0]) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
 	    int16_t *samples = av_malloc(buffer_size);
 
@@ -1000,25 +1001,31 @@ static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_fr
 }
 
 static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double frame_time) {
-	int16_t *samples;
-	uint32_t samples_remaining, offset = 0;
+	int16_t *src_samples, *dst_samples;
+	uint32_t src_samples_remaining;
 
 	if(Z_TYPE_P(buffer) != IS_STRING) {
 		php_error_docref(NULL TSRMLS_CC, E_ERROR, "Audio data must be contained in a string");
 		return FALSE;
 	}
 
-	samples = (int16_t *) Z_STRVAL_P(buffer);
-	samples_remaining = Z_STRLEN_P(buffer) / (sizeof(int16_t) * 2);
+	av_create_audio_buffer_and_resampler(strm, FOR_ENCODING);
 
-	while(samples_remaining) {
+	// source samples are assumed to be stereo--hence the x2
+	src_samples = (int16_t *) Z_STRVAL_P(buffer);
+	src_samples_remaining = Z_STRLEN_P(buffer) / (sizeof(int16_t) * 2);
+	dst_samples = strm->samples + strm->sample_count * 2;
+
+	// keep copying into audio frame until are samples are used up
+	while(src_samples_remaining) {
 		uint32_t samples_needed = strm->sample_buffer_size - strm->sample_count;
-		uint32_t samples_to_copy = (samples_needed < samples_remaining) ? samples_needed : samples_remaining;
+		uint32_t samples_to_copy = (samples_needed < src_samples_remaining) ? samples_needed : src_samples_remaining;
 
-		memcpy(strm->samples, samples + offset, (sizeof(int16_t) * 2) * samples_to_copy);
-		samples_remaining -= samples_to_copy;
+		memcpy(dst_samples, src_samples, (sizeof(int16_t) * 2) * samples_to_copy);
+		src_samples_remaining -= samples_to_copy;
 		strm->sample_count += samples_to_copy;
-		offset += samples_to_copy;
+		src_samples += samples_to_copy * 2;
+		dst_samples += samples_to_copy * 2;
 
 		if(strm->sample_count == strm->sample_buffer_size) {
 			// transfer the data to the frame then compress it
@@ -1027,6 +1034,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double frame_t
 				return FALSE;
 			}
 			strm->sample_count = 0;
+			dst_samples = strm->samples;
 
 			// adjust the time
 			frame_time += samples_to_copy * (1 / 44100.0 / 2);
