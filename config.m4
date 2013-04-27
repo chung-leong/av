@@ -1,7 +1,7 @@
 dnl $Id$
 dnl config.m4 for extension av
 
-PHP_ARG_WITH(av, for libav support,
+PHP_ARG_WITH(av, whether to include libav support,
 [  --with-av             Include libav support])
 
 
@@ -23,7 +23,6 @@ if test "$PHP_AV" != "no"; then
   
   PHP_ADD_INCLUDE($AV_DIR/include/libavcodec/)
   PHP_ADD_INCLUDE($AV_DIR/include/libavformat/)
-  PHP_ADD_INCLUDE($AV_DIR/include/libavutil/)
   PHP_ADD_INCLUDE($AV_DIR/include/libavfilter/)
   PHP_ADD_INCLUDE($AV_DIR/include/libswscale/)      
   PHP_ADD_INCLUDE($AV_DIR/include/libavdevice/)
@@ -44,6 +43,22 @@ if test "$PHP_AV" != "no"; then
   ],[
     -L$AV_DIR/lib -lm
   ])
+
+  PHP_CHECK_LIBRARY(avcodec,avcodec_encode_audio2,
+  [
+    AC_DEFINE(HAVE_AVCODEC_ENCODE_AUDIO2,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
+
+  PHP_CHECK_LIBRARY(avcodec,avcodec_encode_video2,
+  [
+    AC_DEFINE(HAVE_AVCODEC_ENCODE_VIDEO2,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
   
   PHP_CHECK_LIBRARY(avformat,avio_open,
   [
