@@ -869,6 +869,8 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 	}
 }
 
+#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
+
 int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, AVFrame *frame, int *got_packet_ptr) {
 	int ret;
 	TSRMLS_FETCH();
@@ -888,6 +890,8 @@ int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, AVFrame *frame
 	return ret;
 }
 
+#endif
+
 static int av_encode_next_frame(av_stream *strm, double frame_time) {
 	av_file *file = strm->file;
 	int packet_finished;
@@ -904,6 +908,7 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
+			strm->frame->pts = frame_time / av_q2d(strm->codec_cxt->time_base);
 			result = avcodec_encode_video2(strm->codec_cxt, packet, strm->frame, &packet_finished);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
@@ -930,6 +935,9 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 		}
 		packet->stream_index = strm->stream->index;
 		return av_write_next_packet(strm, packet);
+	} else {
+		av_free_packet(packet);
+		efree(packet);
 	}
 	return TRUE;
 }
