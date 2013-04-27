@@ -168,7 +168,7 @@ static void av_file_free(av_file *file) {
 static void av_stream_free(av_stream *strm) {
 	av_file *file = strm->file;
 	if(file->open_stream_count) {
-		int i = 0;
+		uint32_t i = 0;
 		for(i = 0; i < strm->packet_count; i++) {
 			av_free_packet(strm->packet_queue[i]);
 			efree(strm->packet_queue[i]);
@@ -247,7 +247,7 @@ static const char * av_get_option_string(zval *options, const char *key, const c
 	return default_value;
 }
 
-static int av_get_stream_type(const char *type) {
+static int av_get_stream_type(const char *type TSRMLS_DC) {
 	if(strcmp(type, "video") == 0) {
 		return AVMEDIA_TYPE_VIDEO;
 	} else if(strcmp(type, "audio") == 0) {
@@ -514,7 +514,7 @@ PHP_FUNCTION(av_file_eof)
 	ZEND_FETCH_RESOURCE(file, av_file *, &av_res, -1, "av file", le_av_file);
 
 	if(file->flags & AV_FILE_EOF_REACHED) {
-		int i;
+		uint32_t i;
 		eof = TRUE;
 		for(i = 0; i < file->stream_count; i++) {
 			av_stream *strm = file->streams[i];
@@ -556,7 +556,7 @@ PHP_FUNCTION(av_stream_open)
 
 	if(file->flags & AV_FILE_READ) {
 		if(Z_TYPE_P(id) == IS_STRING) {
-			int32_t type = av_get_stream_type(Z_STRVAL_P(id));
+			int32_t type = av_get_stream_type(Z_STRVAL_P(id) TSRMLS_CC);
 			if(type < 0) {
 				return;
 			}
@@ -566,8 +566,8 @@ PHP_FUNCTION(av_stream_open)
 				return;
 			}
 		} else if(Z_TYPE_P(id) == IS_LONG || Z_TYPE_P(id) == IS_DOUBLE) {
-			stream_index = (Z_TYPE_P(id) == IS_DOUBLE) ? Z_DVAL_P(id) : Z_LVAL_P(id);
-			if(!(stream_index >= 0 && stream_index < file->stream_count)) {
+			stream_index = (Z_TYPE_P(id) == IS_DOUBLE) ? (long) Z_DVAL_P(id) : Z_LVAL_P(id);
+			if(!(stream_index >= 0 && (uint32_t) stream_index < file->stream_count)) {
 				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Stream index must be between 0 and %d", file->stream_count);
 				return;
 			}
@@ -589,14 +589,14 @@ PHP_FUNCTION(av_stream_open)
 		codec_cxt->get_buffer = av_stream_get_buffer;
 	} else if(file->flags & AV_FILE_WRITE){
 		double frame_rate = av_get_option_double(options, "frame rate", 25.0);
-		double sample_rate = av_get_option_double(options, "sampling rate", 44100);
+		uint32_t sample_rate = av_get_option_long(options, "sampling rate", 44100);
 		uint32_t width = av_get_option_long(options, "width", 320);
 		uint32_t height = av_get_option_long(options, "height", 240);
 		enum AVMediaType media_type;
 		enum CodecID codec_id;
 
 		if(Z_TYPE_P(id) == IS_STRING) {
-			media_type = av_get_stream_type(Z_STRVAL_P(id));
+			media_type = av_get_stream_type(Z_STRVAL_P(id) TSRMLS_CC);
 			if(media_type < 0) {
 				return;
 			}
@@ -679,7 +679,7 @@ PHP_FUNCTION(av_stream_open)
 	strm->index = stream_index;
 	codec_cxt->opaque = strm;
 
-	if(stream_index >= file->stream_count) {
+	if((uint32_t) stream_index >= file->stream_count) {
 		file->stream_count = stream_index + 1;
 		file->streams = erealloc(file->streams, sizeof(av_stream *) * file->stream_count);
 	}
@@ -689,7 +689,7 @@ PHP_FUNCTION(av_stream_open)
 }
 /* }}} */
 
-static int av_read_next_packet(av_stream *strm) {
+static int av_read_next_packet(av_stream *strm TSRMLS_DC) {
 	if(strm->packet) {
 		if(strm->packet_bytes_remaining > 0) {
 			return TRUE;
@@ -708,7 +708,7 @@ static int av_read_next_packet(av_stream *strm) {
 				efree(packet);
 				break;
 			}
-			if(packet->stream_index >= 0 && packet->stream_index < file->stream_count) {
+			if(packet->stream_index >= 0 && (uint32_t) packet->stream_index < file->stream_count) {
 				dst_strm = file->streams[packet->stream_index];
 			} else {
 				php_error_docref(NULL TSRMLS_CC, E_NOTICE, "Invalid stream index: %d", packet->stream_index);
@@ -729,7 +729,7 @@ static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
 	av_file *file = strm->file;
 	AVPacket *next_packet = NULL;
 	av_stream *next_stream = NULL;
-	int i;
+	uint32_t i;
 
 	av_push_packet(strm, packet);
 
@@ -774,7 +774,7 @@ static void av_create_picture_and_scalar(av_stream *strm, uint32_t width, uint32
 static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
 		double frame_duration = (double) strm->codec_cxt->frame_size / strm->codec_cxt->sample_rate;
-		strm->sample_buffer_size = frame_duration * 44100;
+		strm->sample_buffer_size = (uint32_t) frame_duration * 44100;
 
 		if(strm->codec_cxt->channels != 2 || strm->codec_cxt->sample_rate != 44100 || strm->codec_cxt->sample_fmt != AV_SAMPLE_FMT_S16) {
 			if(purpose == FOR_ENCODING) {
@@ -836,10 +836,10 @@ static void av_copy_image_from_gd(AVFrame *picture, gdImagePtr image) {
 	int *gd_pixel;
 	uint8_t *av_pixel;
 	uint32_t i, j;
-	for(i = 0; i < image->sy; i++) {
+	for(i = 0; i < (uint32_t) image->sy; i++) {
 		gd_pixel = image->tpixels[i];
 		av_pixel = picture->data[0] + picture->linesize[0] * i;
-		for(j = 0; j < image->sx; j++) {
+		for(j = 0; j < (uint32_t) image->sx; j++) {
 			av_pixel[0] = gdTrueColorGetRed(*gd_pixel);
 			av_pixel[1] = gdTrueColorGetGreen(*gd_pixel);
 			av_pixel[2] = gdTrueColorGetBlue(*gd_pixel);
@@ -854,10 +854,10 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 	int *gd_pixel;
 	uint8_t *av_pixel;
 	uint32_t i, j;
-	for(i = 0; i < image->sy; i++) {
+	for(i = 0; i < (uint32_t) image->sy; i++) {
 		gd_pixel = image->tpixels[i];
 		av_pixel = picture->data[0] + picture->linesize[0] * i;
-		for(j = 0; j < image->sx; j++) {
+		for(j = 0; j < (uint32_t) image->sx; j++) {
 			int r = av_pixel[0];
 			int g = av_pixel[1];
 			int b = av_pixel[2];
@@ -920,10 +920,10 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 	}
 	if(packet_finished) {
 		if(strm->frame->pts != AV_NOPTS_VALUE) {
-			packet->pts = frame_time / av_q2d(strm->stream->time_base);
+			packet->pts = (int64_t) (frame_time / av_q2d(strm->stream->time_base));
 		}
         if(packet->duration > 0) {
-        	packet->duration = av_rescale_q(strm->packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
+        	packet->duration = (int) av_rescale_q(strm->packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
         }
 		if(strm->codec_cxt->coded_frame->key_frame) {
 			packet->flags |= AV_PKT_FLAG_KEY;
@@ -934,11 +934,11 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 	return TRUE;
 }
 
-static int av_decode_next_frame(av_stream *strm, double *p_time) {
+static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 	int frame_finished = FALSE;
 	for(;;) {
 		int bytes_decoded;
-		if(av_read_next_packet(strm)) {
+		if(av_read_next_packet(strm TSRMLS_CC)) {
 			switch(strm->codec->type) {
 				case AVMEDIA_TYPE_VIDEO:
 					bytes_decoded = avcodec_decode_video2(strm->codec_cxt, strm->frame, &frame_finished, strm->packet);
@@ -961,7 +961,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time) {
 		strm->packet_bytes_remaining -= bytes_decoded;
 
 		if(frame_finished) {
-			int32_t time_stamp = 0;
+			int64_t time_stamp = 0;
 			if(strm->packet) {
 				// use the packet's dts if it's available; otherwise
 				// use the pts of the packet that triggered the creation
@@ -983,15 +983,15 @@ static int av_decode_next_frame(av_stream *strm, double *p_time) {
 	return TRUE;
 }
 
-static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double frame_time) {
+static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double frame_time TSRMLS_DC) {
 	av_create_picture_and_scalar(strm, image->sx, image->sy, FOR_ENCODING);
 	av_copy_image_from_gd(strm->picture, image);
 	av_transfer_picture_to_frame(strm);
 	return av_encode_next_frame(strm, frame_time);
 }
 
-static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_frame_time) {
-	if(av_decode_next_frame(strm, p_frame_time)) {
+static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_frame_time TSRMLS_DC) {
+	if(av_decode_next_frame(strm, p_frame_time TSRMLS_CC)) {
 		av_create_picture_and_scalar(strm, image->sx, image->sy, FOR_DECODING);
 		av_transfer_picture_from_frame(strm);
 		av_copy_image_to_gd(strm->picture, image);
@@ -1000,7 +1000,7 @@ static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_fr
 	return FALSE;
 }
 
-static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double frame_time) {
+static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double frame_time TSRMLS_DC) {
 	int16_t *src_samples, *dst_samples;
 	uint32_t src_samples_remaining;
 
@@ -1043,8 +1043,8 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double frame_t
 	return TRUE;
 }
 
-static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_frame_time) {
-	if(av_decode_next_frame(strm, p_frame_time)) {
+static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_frame_time TSRMLS_DC) {
+	if(av_decode_next_frame(strm, p_frame_time TSRMLS_CC)) {
 		uint32_t data_len;
 
 		av_create_audio_buffer_and_resampler(strm, FOR_DECODING);
@@ -1083,7 +1083,7 @@ PHP_FUNCTION(av_stream_write_image)
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &av_res, -1, "av stream", le_av_strm);
 	ZEND_FETCH_RESOURCE(image, gdImagePtr, &gd_res, -1, "image", le_gd);
 
-	if(av_encode_image_from_gd(strm, image, frame_time)) {
+	if(av_encode_image_from_gd(strm, image, frame_time TSRMLS_CC)) {
 		RETVAL_TRUE;
 	} else {
 		RETVAL_FALSE;
@@ -1104,7 +1104,7 @@ PHP_FUNCTION(av_stream_write_pcm)
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &av_res, -1, "av stream", le_av_strm);
 
-	if(av_encode_pcm_from_zval(strm, buffer, frame_time)) {
+	if(av_encode_pcm_from_zval(strm, buffer, frame_time TSRMLS_CC)) {
 		RETVAL_TRUE;
 	} else {
 		RETVAL_FALSE;
@@ -1128,7 +1128,7 @@ PHP_FUNCTION(av_stream_read_image)
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &av_res, -1, "av stream", le_av_strm);
 	ZEND_FETCH_RESOURCE(image, gdImagePtr, &gd_res, -1, "image", le_gd);
 
-	if(av_decode_image_to_gd(strm, image, &frame_time)) {
+	if(av_decode_image_to_gd(strm, image, &frame_time TSRMLS_CC)) {
 		RETVAL_TRUE;
 	} else {
 		RETVAL_FALSE;
@@ -1152,7 +1152,7 @@ PHP_FUNCTION(av_stream_read_pcm)
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &av_res, -1, "av stream", le_av_strm);
 
-	if(av_decode_pcm_to_zval(strm, buffer, &frame_time)) {
+	if(av_decode_pcm_to_zval(strm, buffer, &frame_time TSRMLS_CC)) {
 		RETVAL_TRUE;
 	} else {
 		RETVAL_FALSE;
