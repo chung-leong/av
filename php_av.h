@@ -45,7 +45,7 @@ typedef struct av_stream av_stream;
 
 struct av_stream {
 	AVCodecContext *codec_cxt;
-	AVCodec *codec;
+	const AVCodec *codec;
 	AVStream *stream;
 
 	AVFrame *frame;						// the current frame

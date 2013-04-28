@@ -291,13 +291,19 @@ static int av_shift_packet(av_stream *strm) {
 	}
 }
 
+/* {{{ php_qb_init_globals
+ */
+static void php_av_init_globals(zend_av_globals *av_globals)
+{
+}
+/* }}} */
+
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(av)
 {
-	/* If you have INI entries, uncomment these lines 
-	REGISTER_INI_ENTRIES();
-	*/
+	ZEND_INIT_MODULE_GLOBALS(av, php_av_init_globals, NULL);
+
 	av_register_all();
 	avcodec_register_all();
 
@@ -324,9 +330,12 @@ PHP_MSHUTDOWN_FUNCTION(av)
  */
 PHP_RINIT_FUNCTION(av)
 {
+	zend_av_globals *g = (zend_av_globals *) (*((void ***) tsrm_ls))[TSRM_UNSHUFFLE_RSRC_ID(av_globals_id)];
 	if(le_gd == -1) {
 		le_gd = zend_fetch_list_dtor_id("gd");
 	}
+	AV_G(video_buffer) = NULL;
+	AV_G(video_buffer_size) = 0;
 	return SUCCESS;
 }
 /* }}} */
@@ -908,7 +917,7 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
-			strm->frame->pts = frame_time / av_q2d(strm->codec_cxt->time_base);
+			strm->frame->pts = (int64_t) (frame_time / av_q2d(strm->codec_cxt->time_base));
 			result = avcodec_encode_video2(strm->codec_cxt, packet, strm->frame, &packet_finished);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
