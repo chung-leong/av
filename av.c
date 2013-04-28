@@ -330,7 +330,6 @@ PHP_MSHUTDOWN_FUNCTION(av)
  */
 PHP_RINIT_FUNCTION(av)
 {
-	zend_av_globals *g = (zend_av_globals *) (*((void ***) tsrm_ls))[TSRM_UNSHUFFLE_RSRC_ID(av_globals_id)];
 	if(le_gd == -1) {
 		le_gd = zend_fetch_list_dtor_id("gd");
 	}
@@ -599,10 +598,11 @@ PHP_FUNCTION(av_stream_open)
 	} else if(file->flags & AV_FILE_WRITE){
 		double frame_rate = av_get_option_double(options, "frame rate", 25.0);
 		uint32_t sample_rate = av_get_option_long(options, "sampling rate", 44100);
+		uint32_t bit_rate = av_get_option_long(options, "bit rate", 256000);
 		uint32_t width = av_get_option_long(options, "width", 320);
 		uint32_t height = av_get_option_long(options, "height", 240);
 		enum AVMediaType media_type;
-		enum CodecID codec_id;
+		enum AVCodecID codec_id;
 
 		if(Z_TYPE_P(id) == IS_STRING) {
 			media_type = av_get_stream_type(Z_STRVAL_P(id) TSRMLS_CC);
@@ -616,8 +616,7 @@ PHP_FUNCTION(av_stream_open)
 				codec_id = file->output_format->video_codec;
 				break;
 			case AVMEDIA_TYPE_AUDIO:
-				//codec_id = file->output_format->audio_codec;
-				codec_id = CODEC_ID_VORBIS;
+				codec_id = file->output_format->audio_codec;
 				break;
 			case AVMEDIA_TYPE_SUBTITLE:
 				codec_id = file->output_format->subtitle_codec;
@@ -646,6 +645,7 @@ PHP_FUNCTION(av_stream_open)
 				codec_cxt->time_base = av_d2q(1 / frame_rate, 255);
 				codec_cxt->pix_fmt = codec->pix_fmts[0];
 				codec_cxt->gop_size = 25;
+				codec_cxt->bit_rate = bit_rate;
 				break;
 			case AVMEDIA_TYPE_AUDIO:
 				file->format_cxt->audio_codec_id = codec->id;
@@ -880,7 +880,7 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 
 #ifndef HAVE_AVCODEC_ENCODE_VIDEO2
 
-int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, AVFrame *frame, int *got_packet_ptr) {
+int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame *frame, int *got_packet_ptr) {
 	int ret;
 	TSRMLS_FETCH();
 

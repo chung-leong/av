@@ -34,7 +34,7 @@ if test "$PHP_AV" != "no"; then
 
   PHP_ADD_INCLUDE($AV_DIR/include)
 
-  PHP_CHECK_LIBRARY(avcodec,avcodec_open,
+  PHP_CHECK_LIBRARY(avcodec,avcodec_open2,
   [
     PHP_ADD_LIBRARY_WITH_PATH(avcodec, $AV_DIR/lib, AV_SHARED_LIBADD)
     AC_DEFINE(HAVE_AVLIB,1,[ ])
