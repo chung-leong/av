@@ -526,8 +526,10 @@ PHP_FUNCTION(av_file_eof)
 		eof = TRUE;
 		for(i = 0; i < file->stream_count; i++) {
 			av_stream *strm = file->streams[i];
-			if((strm->packet && strm->packet_bytes_remaining > 0) || strm->packet_count > 0) {
-				eof = FALSE;
+			if(strm) {
+				if((strm->packet && strm->packet_bytes_remaining > 0) || strm->packet_count > 0) {
+					eof = FALSE;
+				}
 			}
 		}
 	}
@@ -586,6 +588,7 @@ PHP_FUNCTION(av_stream_open)
 
 		stream = file->format_cxt->streams[stream_index];
 		codec_cxt = stream->codec;
+		codec_cxt->thread_count = 1;
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open codec '%s'", codec_cxt->codec->name);
 			return;
@@ -637,6 +640,7 @@ PHP_FUNCTION(av_stream_open)
 		if(codec->capabilities & CODEC_CAP_EXPERIMENTAL) {
 			codec_cxt->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 		}
+		codec_cxt->thread_count = 1;
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
 				file->format_cxt->video_codec_id = codec->id;
@@ -664,7 +668,7 @@ PHP_FUNCTION(av_stream_open)
 		}
 
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open codec '%s'", codec_cxt->codec->name);
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open codec '%s'", codec->name);
 			return;
 		}
 
@@ -901,7 +905,7 @@ int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 
 #endif
 
-static int av_encode_next_frame(av_stream *strm, double frame_time) {
+static int av_encode_next_frame(av_stream *strm, double frame_duration) {
 	av_file *file = strm->file;
 	int packet_finished;
 	int result;
@@ -917,7 +921,7 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
-			strm->frame->pts = (int64_t) (frame_time / av_q2d(strm->codec_cxt->time_base));
+			strm->frame->pts += (int64_t) (frame_duration / av_q2d(strm->codec_cxt->time_base));
 			result = avcodec_encode_video2(strm->codec_cxt, packet, strm->frame, &packet_finished);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
@@ -933,12 +937,8 @@ static int av_encode_next_frame(av_stream *strm, double frame_time) {
 		return FALSE;
 	}
 	if(packet_finished) {
-		if(strm->frame->pts != AV_NOPTS_VALUE) {
-			packet->pts = (int64_t) (frame_time / av_q2d(strm->stream->time_base));
-		}
-        if(packet->duration > 0) {
-        	packet->duration = (int) av_rescale_q(strm->packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
-        }
+		packet->pts = av_rescale_q(strm->frame->pts, strm->codec_cxt->time_base, strm->stream->time_base);
+       	packet->duration = 4000;
 		if(strm->codec_cxt->coded_frame->key_frame) {
 			packet->flags |= AV_PKT_FLAG_KEY;
 		}
