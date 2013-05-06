@@ -84,8 +84,8 @@ enum {
 
 struct av_file {
 	AVFormatContext *format_cxt;
-	AVInputFormat *input_format;
-	AVOutputFormat *output_format;
+	const AVInputFormat *input_format;
+	const AVOutputFormat *output_format;
 
 	av_stream **streams;
 	uint32_t stream_count;
