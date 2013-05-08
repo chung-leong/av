@@ -903,7 +903,7 @@ int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 
 #endif
 
-static int av_encode_next_frame(av_stream *strm, double frame_duration, double *p_time) {
+static int av_encode_next_frame(av_stream *strm, double duration, double *p_time) {
 	av_file *file = strm->file;
 	int packet_finished;
 	int result;
@@ -919,7 +919,7 @@ static int av_encode_next_frame(av_stream *strm, double frame_duration, double *
 
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
-			strm->frame->pts += (int64_t) (frame_duration / av_q2d(strm->codec_cxt->time_base));
+			strm->frame->pts += (int64_t) (duration / av_q2d(strm->codec_cxt->time_base));
 			result = avcodec_encode_video2(strm->codec_cxt, packet, strm->frame, &packet_finished);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
@@ -1015,8 +1015,8 @@ static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_ti
 }
 
 static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double duration, double *p_time TSRMLS_DC) {
-	float *src_samples, *dst_samples;
-	uint32_t src_samples_remaining;
+	/*float *src_samples, *dst_samples;
+	uint32_t src_sample_count, dst_sample_count, samples_processed, samples_remaining;
 
 	if(Z_TYPE_P(buffer) != IS_STRING) {
 		php_error_docref(NULL TSRMLS_CC, E_ERROR, "Audio data must be contained in a string");
@@ -1027,16 +1027,27 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double duratio
 
 	// source samples are assumed to be stereo--hence the x2
 	src_samples = (float *) Z_STRVAL_P(buffer);
-	src_samples_remaining = Z_STRLEN_P(buffer) / (sizeof(float) * 2);
+	src_sample_count = Z_STRLEN_P(buffer) / (sizeof(float) * 2);
 	dst_samples = strm->samples + strm->sample_count * 2;
 
-	// keep copying into audio frame until are samples are used up
-	while(src_samples_remaining) {
+	if(!duration) {
+		duration = (double) src_samples_remaining / (44100.0 * 2);
+		dst_sample_count = src_sample_count;
+	} else {
+		dst_sample_count = (double) duration * (44100.0 * 2);
+	}
+
+	// keep copying into audio frame until are all samples are processed
+	samples_processed = 0;
+	samples_remaining = dst_sample_count;
+	while(samples_remaining) {
 		uint32_t samples_needed = strm->sample_buffer_size - strm->sample_count;
-		uint32_t samples_to_copy = (samples_needed < src_samples_remaining) ? samples_needed : src_samples_remaining;
+		uint32_t samples_to_copy = (samples_needed < samples_remaining) ? samples_needed : samples_remaining;
 
 		memcpy(dst_samples, src_samples, (sizeof(int16_t) * 2) * samples_to_copy);
 		src_samples_remaining -= samples_to_copy;
+		samples_remaining -= samples_to_copy;
+		samples_
 		strm->sample_count += samples_to_copy;
 		src_samples += samples_to_copy * 2;
 		dst_samples += samples_to_copy * 2;
@@ -1049,11 +1060,8 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double duratio
 			}
 			strm->sample_count = 0;
 			dst_samples = strm->samples;
-
-			// adjust the time
-			//frame_time += samples_to_copy * (1 / 44100.0 / 2);
 		}
-	}
+	}*/
 	return TRUE;
 }
 
@@ -1089,14 +1097,13 @@ PHP_FUNCTION(av_stream_write_image)
 	zval *av_res, *gd_res;
 	av_stream *strm;
 	gdImagePtr image;
-	double duration, time;
+	double duration = 0, time;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rrd", &av_res, &gd_res, &duration) == FAILURE) {
+	if(zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr|d", &av_res, &gd_res, &duration) == FAILURE) {
 		return;
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &av_res, -1, "av stream", le_av_strm);
 	ZEND_FETCH_RESOURCE(image, gdImagePtr, &gd_res, -1, "image", le_gd);
-
 	if(av_encode_image_from_gd(strm, image, duration, &time TSRMLS_CC)) {
 		RETURN_DOUBLE(time);
 	} else {
@@ -1113,11 +1120,10 @@ PHP_FUNCTION(av_stream_write_pcm)
 	av_stream *strm;
 	double duration, time = 0;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rzd", &av_res, &buffer, &duration) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rz|d", &av_res, &buffer, &duration) == FAILURE) {
 		return;
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &av_res, -1, "av stream", le_av_strm);
-
 	if(av_encode_pcm_from_zval(strm, buffer, duration, &time TSRMLS_CC)) {
 		RETURN_DOUBLE(time);
 	} else {
