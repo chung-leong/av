@@ -102,6 +102,7 @@ PHP_MINFO_FUNCTION(av);
 PHP_FUNCTION(av_file_open);
 PHP_FUNCTION(av_file_close);
 PHP_FUNCTION(av_file_eof);
+PHP_FUNCTION(av_file_stat);
 
 PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
