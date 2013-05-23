@@ -16,19 +16,15 @@ $a_time = 0;
 while(!av_file_eof($file_in)) {
 	if($v_time < $a_time || !$a_strm_in) {
 		if(av_stream_read_image($v_strm_in, $image, $v_time)) {
-			if($v_time >= 0) {
-				av_stream_write_image($v_strm_out, $image, $v_time);
-			}
-			//echo "V: $v_time\n";
+			av_stream_write_image($v_strm_out, $image, $v_time);
+			echo "V: $v_time\n";
 		} else {
 			$v_time = INF;
 		}
 	} else {
 		if(av_stream_read_pcm($a_strm_in, $pcm, $a_time)) {
-			if($a_time >= 0) {
-				av_stream_write_pcm($a_strm_out, $pcm, $a_time);
-			}
-			//echo "A: $a_time\n";
+			av_stream_write_pcm($a_strm_out, $pcm, $a_time);
+			echo "A: $a_time\n";
 		} else {
 			$a_time = INF;
 		}

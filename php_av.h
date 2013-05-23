@@ -83,6 +83,10 @@ enum {
 	AV_FILE_FREED				= 0x8000,
 };
 
+enum {
+	AV_STREAM_FREED				= 0x8000,
+};
+
 struct av_file {
 	AVFormatContext *format_cxt;
 	const AVInputFormat *input_format;

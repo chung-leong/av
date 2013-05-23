@@ -158,12 +158,47 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 */
 /* }}} */
 
+static int av_flush_pending_packets(av_file *file);
+
 static void av_file_free(av_file *file) {
 	file->flags |= AV_FILE_FREED;
+	// don't free anything until all streams are closed
 	if(file->open_stream_count == 0) {
-		// don't free anything until all streams are closed
+		uint32_t i = 0, j = 0;
+		if(file->flags & AV_FILE_WRITE) {
+			av_flush_pending_packets(file);
+			if(file->flags & AV_FILE_HEADER_WRITTEN) {
+				av_write_trailer(file->format_cxt);
+			}
+		}
 		if(file->flags & AV_FILE_READ) {
 			avformat_close_input(&file->format_cxt);
+		}
+
+		// free the streams
+		for(i = 0; i < file->stream_count; i++) {
+			av_stream *strm = file->streams[i];
+
+			avcodec_close(strm->codec_cxt);
+
+			if(strm->samples) {
+				efree(strm->samples);
+			}
+			if(strm->resampler_cxt) {
+				swr_free(&strm->resampler_cxt);
+			}
+			if(strm->packet) {
+				av_free_packet(strm->packet);
+				efree(strm->packet);
+			}
+			if(strm->packet_queue) {
+				for(j = 0; j < strm->packet_count; j++) {
+					av_free_packet(strm->packet_queue[i]);
+					efree(strm->packet_queue[i]);
+				}
+				efree(strm->packet_queue);
+			}
+			efree(strm);
 		}
 		efree(file->streams);
 		efree(file);
@@ -171,40 +206,16 @@ static void av_file_free(av_file *file) {
 }
 
 static void av_stream_free(av_stream *strm) {
-	av_file *file = strm->file;
-	if(file->open_stream_count) {
-		uint32_t i = 0;
-		for(i = 0; i < strm->packet_count; i++) {
-			av_free_packet(strm->packet_queue[i]);
-			efree(strm->packet_queue[i]);
-		}
-		efree(strm->packet_queue);
-		if(strm->packet) {
-			av_free_packet(strm->packet);
-			efree(strm->packet);
-		}
-		avcodec_close(strm->codec_cxt);
-		if(strm->samples) {
-			efree(strm->samples);
-		}
-		if(strm->resampler_cxt) {
-			swr_free(&strm->resampler_cxt);
-		}
-
-		file->streams[strm->index] = NULL;
+	if(!(strm->flags & AV_STREAM_FREED)) {
+		av_file *file = strm->file;
 		file->open_stream_count--;
+		strm->flags &= AV_STREAM_FREED;
 		if(file->open_stream_count == 0) {
-			if(file->flags & AV_FILE_WRITE) {
-				if(file->flags & AV_FILE_HEADER_WRITTEN) {
-					av_write_trailer(file->format_cxt);
-				}
-			}
 			if(file->flags & AV_FILE_FREED) {
 				// free the file if no zval is referencing it
 				av_file_free(file);
 			}
 		}
-		efree(strm);
 	}
 }
 
@@ -845,29 +856,62 @@ static int av_read_next_packet(av_stream *strm TSRMLS_DC) {
 	return (strm->packet_bytes_remaining);
 }
 
-static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
-	av_file *file = strm->file;
-	AVPacket *next_packet = NULL;
-	av_stream *next_stream = NULL;
+static av_stream *av_get_writable_stream(av_file *file) {
+	av_stream *pending_stream = NULL;
 	uint32_t i;
 
-	av_push_packet(strm, packet);
-
-	for(i = 0; i < file->stream_count; i++) {
-		strm = file->streams[i];
-		if(strm && strm->packet) {
-			if(!next_packet || strm->packet->pts < next_packet->pts) {
-				next_packet = strm->packet;
-				next_stream = strm;
+	if(!(file->flags & AV_FILE_EOF_REACHED)) {
+		// wait until every stream has a packet
+		for(i = 0; i < file->stream_count; i++) {
+			av_stream *strm = file->streams[i];
+			if(!(strm->flags & AV_STREAM_FREED) && !strm->packet) {
+				return NULL;
 			}
 		}
 	}
 
-	printf("Stream %d\n", next_packet->stream_index);
-	if(av_interleaved_write_frame(file->format_cxt, next_packet) < 0) {
-		return FALSE;
+	// see which stream has a packet with the smallest decode time
+	for(i = 0; i < file->stream_count; i++) {
+		av_stream *strm = file->streams[i];
+		if(strm && strm->packet) {
+			if(!pending_stream || strm->packet->pts < pending_stream->packet->pts) {
+				pending_stream = strm;
+			}
+		}
 	}
-	av_shift_packet(next_stream);
+	return pending_stream;
+}
+
+static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
+	av_stream *pending_stream;
+	av_file *file = strm->file;
+
+	// push the packet onto the queue
+	av_push_packet(strm, packet);
+
+	// write packets that are pending and ready
+	while((pending_stream = av_get_writable_stream(file))) {
+		AVPacket *next_packet = pending_stream->packet;
+		int result = av_interleaved_write_frame(file->format_cxt, next_packet);
+		av_shift_packet(pending_stream);
+		if(result < 0) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+static int av_flush_pending_packets(av_file *file) {
+	av_stream *pending_stream;
+	file->flags |= AV_FILE_EOF_REACHED;
+	while((pending_stream = av_get_writable_stream(file))) {
+		AVPacket *next_packet = pending_stream->packet;
+		int result = av_interleaved_write_frame(file->format_cxt, next_packet);
+		av_shift_packet(pending_stream);
+		if(result < 0) {
+			return FALSE;
+		}
+	}
 	return TRUE;
 }
 
@@ -1012,7 +1056,7 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 	AVPacket *packet = emalloc(sizeof(AVPacket));
 	memset(packet, 0, sizeof(AVPacket));
 
-	int64_t presentation_time = (int64_t) (time / av_q2d(strm->codec_cxt->time_base));
+	strm->frame->pts = (int64_t) (time / av_q2d(strm->codec_cxt->time_base));
 
 	if(!(file->flags & AV_FILE_HEADER_WRITTEN)) {
 		avformat_write_header(file->format_cxt, NULL);
@@ -1022,7 +1066,6 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 	av_init_packet(packet);
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
-			strm->frame->pts = presentation_time;
 			result = avcodec_encode_video2(strm->codec_cxt, packet, strm->frame, &packet_finished);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
@@ -1038,7 +1081,16 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 		return FALSE;
 	}
 	if(packet_finished) {
-		packet->pts = av_rescale_q(presentation_time, strm->codec_cxt->time_base, strm->stream->time_base);
+		// rescale time values for container
+		if(packet->pts != AV_NOPTS_VALUE) {
+			packet->pts = av_rescale_q(packet->pts, strm->codec_cxt->time_base, strm->stream->time_base);
+		}
+		if(packet->dts != AV_NOPTS_VALUE) {
+			packet->dts = av_rescale_q(packet->dts, strm->codec_cxt->time_base, strm->stream->time_base);
+		}
+		if(packet->duration != AV_NOPTS_VALUE) {
+			packet->duration = av_rescale_q(packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
+		}
 		if(strm->codec_cxt->coded_frame && strm->codec_cxt->coded_frame->key_frame) {
 			packet->flags |= AV_PKT_FLAG_KEY;
 		}
