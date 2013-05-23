@@ -902,7 +902,7 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 		} else {
 			// resampling is not needed
 		}
-		strm->samples = emalloc(sizeof(int16_t) * strm->sample_buffer_size * 2);
+		strm->samples = emalloc(sizeof(float) * strm->sample_buffer_size * 2);
 	}
 }
 
@@ -936,7 +936,7 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 	if(strm->resampler_cxt) {
 		audio_resample(strm->resampler_cxt, (short *) strm->frame->data[0], strm->samples, strm->sample_buffer_size);
 	} else {
-		memcpy(strm->frame->data[0], strm->samples, sizeof(int16_t) * strm->sample_buffer_size * 2);
+		memcpy(strm->frame->data[0], strm->samples, sizeof(float) * strm->sample_buffer_size * 2);
 	}
 }
 
@@ -944,7 +944,7 @@ static void av_transfer_pcm_from_frame(av_stream *strm) {
 	if(strm->resampler_cxt) {
 		audio_resample(strm->resampler_cxt, strm->samples, (short *) strm->frame->data[0], strm->frame->nb_samples);
 	} else {
-		memcpy(strm->samples, strm->frame->data[0], sizeof(int16_t) * strm->sample_buffer_size * 2);
+		memcpy(strm->samples, strm->frame->data[0], sizeof(float) * strm->sample_buffer_size * 2);
 	}
 }
 
