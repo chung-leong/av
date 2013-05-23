@@ -39,6 +39,7 @@ extern zend_module_entry av_module_entry;
 #include <avcodec.h>
 #include <avformat.h>
 #include <swscale.h>
+#include <swresample.h>
 
 typedef struct av_file av_file;
 typedef struct av_stream av_stream;
@@ -54,10 +55,10 @@ struct av_stream {
 	AVFrame *picture;					// RGBA picture
 	struct SwsContext *scalar_cxt;		// scalar context
 
-	short *samples;						// PCM data after resampling
+	float *samples;						// PCM data after resampling
 	uint32_t sample_count;				// the number of samples currently buffered
 	uint32_t sample_buffer_size;		// the number of samples in an audio frame
-	ReSampleContext *resampler_cxt;		// resampler context
+	SwrContext *resampler_cxt;
 
 	AVPacket *packet;					// the current packet
 	AVPacket **packet_queue;			// packets for this stream waiting to be decoded or written to disk

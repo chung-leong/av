@@ -187,6 +187,9 @@ static void av_stream_free(av_stream *strm) {
 		if(strm->samples) {
 			efree(strm->samples);
 		}
+		if(strm->resampler_cxt) {
+			swr_free(&strm->resampler_cxt);
+		}
 
 		file->streams[strm->index] = NULL;
 		file->open_stream_count--;
@@ -756,9 +759,10 @@ PHP_FUNCTION(av_stream_open)
 				break;
 			case AVMEDIA_TYPE_AUDIO:
 				file->format_cxt->audio_codec_id = codec->id;
-				codec_cxt->sample_fmt = AV_SAMPLE_FMT_S16;
+				codec_cxt->sample_fmt = codec->sample_fmts[0];
 				codec_cxt->time_base = av_d2q(1 / sample_rate, 255);
 				codec_cxt->sample_rate = sample_rate;
+				codec_cxt->channel_layout = AV_CH_LAYOUT_STEREO;
 				codec_cxt->channels = 2;
 				codec_cxt->global_quality = 3540;
 				codec_cxt->flags |= CODEC_FLAG_QSCALE;
@@ -859,6 +863,7 @@ static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
 		}
 	}
 
+	printf("Stream %d\n", next_packet->stream_index);
 	if(av_interleaved_write_frame(file->format_cxt, next_packet) < 0) {
 		return FALSE;
 	}
@@ -890,18 +895,14 @@ static void av_create_picture_and_scalar(av_stream *strm, uint32_t width, uint32
 static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
 		double frame_duration = (double) strm->codec_cxt->frame_size / strm->codec_cxt->sample_rate;
-		strm->sample_buffer_size = (uint32_t) frame_duration * 44100;
+		strm->sample_buffer_size = (uint32_t) (frame_duration * 44100);
 
-		if(strm->codec_cxt->channels != 2 || strm->codec_cxt->sample_rate != 44100 || strm->codec_cxt->sample_fmt != AV_SAMPLE_FMT_FLT) {
-			if(purpose == FOR_ENCODING) {
-				// cleong: I have no idea what the last four parameters do; using values that came up in Google
-				strm->resampler_cxt = av_audio_resample_init(strm->codec_cxt->channels, 2, strm->codec_cxt->sample_rate, 44100, strm->codec_cxt->sample_fmt, AV_SAMPLE_FMT_FLT, 16, 10, 0, 0.8);
-			} else {
-				strm->resampler_cxt =  av_audio_resample_init(2, strm->codec_cxt->channels, 44100, strm->codec_cxt->sample_rate, AV_SAMPLE_FMT_FLT, strm->codec_cxt->sample_fmt, 16, 10, 0, 0.8);
-			}
+		if(purpose == FOR_ENCODING) {
+			strm->resampler_cxt = swr_alloc_set_opts(NULL, strm->codec_cxt->channel_layout, strm->codec_cxt->sample_fmt, strm->codec_cxt->sample_rate, AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, 44100, 0, NULL);
 		} else {
-			// resampling is not needed
+			strm->resampler_cxt = swr_alloc_set_opts(NULL, AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, 44100, strm->codec_cxt->channel_layout, strm->codec_cxt->sample_fmt, strm->codec_cxt->sample_rate, 0, NULL);
 		}
+		swr_init(strm->resampler_cxt);
 		strm->samples = emalloc(sizeof(float) * strm->sample_buffer_size * 2);
 	}
 }
@@ -923,29 +924,25 @@ static void av_transfer_picture_from_frame(av_stream *strm) {
 }
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
+	int result;
+
 	// allocate the audio frame if it's not there
 	if(!strm->frame->data[0]) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
-	    int16_t *samples = av_malloc(buffer_size);
+	    float *samples = av_malloc(buffer_size);
 
 	    strm->frame->format = strm->codec_cxt->sample_fmt;
 	    strm->frame->nb_samples = strm->codec_cxt->frame_size;
 		avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, (uint8_t *) samples, buffer_size, 1);
 	}
 
-	if(strm->resampler_cxt) {
-		audio_resample(strm->resampler_cxt, (short *) strm->frame->data[0], strm->samples, strm->sample_buffer_size);
-	} else {
-		memcpy(strm->frame->data[0], strm->samples, sizeof(float) * strm->sample_buffer_size * 2);
-	}
+	result = swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_buffer_size);
 }
 
 static void av_transfer_pcm_from_frame(av_stream *strm) {
-	if(strm->resampler_cxt) {
-		audio_resample(strm->resampler_cxt, strm->samples, (short *) strm->frame->data[0], strm->frame->nb_samples);
-	} else {
-		memcpy(strm->samples, strm->frame->data[0], sizeof(float) * strm->sample_buffer_size * 2);
-	}
+	int result;
+
+	result = swr_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, strm->sample_buffer_size, (const uint8_t **) strm->frame->data, strm->frame->nb_samples);
 }
 
 static void av_copy_image_from_gd(AVFrame *picture, gdImagePtr image) {
@@ -1015,16 +1012,17 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 	AVPacket *packet = emalloc(sizeof(AVPacket));
 	memset(packet, 0, sizeof(AVPacket));
 
+	int64_t presentation_time = (int64_t) (time / av_q2d(strm->codec_cxt->time_base));
+
 	if(!(file->flags & AV_FILE_HEADER_WRITTEN)) {
 		avformat_write_header(file->format_cxt, NULL);
 		file->flags |= AV_FILE_HEADER_WRITTEN;
 	}
 
 	av_init_packet(packet);
-
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
-			strm->frame->pts = (int64_t) (time / av_q2d(strm->codec_cxt->time_base));
+			strm->frame->pts = presentation_time;
 			result = avcodec_encode_video2(strm->codec_cxt, packet, strm->frame, &packet_finished);
 			break;
 		case AVMEDIA_TYPE_AUDIO:
@@ -1040,7 +1038,7 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 		return FALSE;
 	}
 	if(packet_finished) {
-		packet->pts = av_rescale_q(strm->frame->pts, strm->codec_cxt->time_base, strm->stream->time_base);
+		packet->pts = av_rescale_q(presentation_time, strm->codec_cxt->time_base, strm->stream->time_base);
 		if(strm->codec_cxt->coded_frame && strm->codec_cxt->coded_frame->key_frame) {
 			packet->flags |= AV_PKT_FLAG_KEY;
 		}
@@ -1120,8 +1118,8 @@ static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_ti
 }
 
 static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TSRMLS_DC) {
-	/*float *src_samples, *dst_samples;
-	uint32_t src_sample_count, dst_sample_count, samples_processed, samples_remaining;
+	float *src_samples, *dst_samples;
+	uint32_t src_samples_remaining;
 
 	if(Z_TYPE_P(buffer) != IS_STRING) {
 		php_error_docref(NULL TSRMLS_CC, E_ERROR, "Audio data must be contained in a string");
@@ -1132,21 +1130,16 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 
 	// source samples are assumed to be stereo--hence the x2
 	src_samples = (float *) Z_STRVAL_P(buffer);
-	src_sample_count = Z_STRLEN_P(buffer) / (sizeof(float) * 2);
+	src_samples_remaining = Z_STRLEN_P(buffer) / (sizeof(float) * 2);
 	dst_samples = strm->samples + strm->sample_count * 2;
-	dst_sample_count = src_sample_count;
 
-	// keep copying into audio frame until are all samples are processed
-	samples_processed = 0;
-	samples_remaining = dst_sample_count;
-	while(samples_remaining) {
+	// keep copying into audio frame until are samples are used up
+	while(src_samples_remaining) {
 		uint32_t samples_needed = strm->sample_buffer_size - strm->sample_count;
-		uint32_t samples_to_copy = (samples_needed < samples_remaining) ? samples_needed : samples_remaining;
+		uint32_t samples_to_copy = (samples_needed < src_samples_remaining) ? samples_needed : src_samples_remaining;
 
-		memcpy(dst_samples, src_samples, (sizeof(int16_t) * 2) * samples_to_copy);
+		memcpy(dst_samples, src_samples, (sizeof(float) * 2) * samples_to_copy);
 		src_samples_remaining -= samples_to_copy;
-		samples_remaining -= samples_to_copy;
-		samples_
 		strm->sample_count += samples_to_copy;
 		src_samples += samples_to_copy * 2;
 		dst_samples += samples_to_copy * 2;
@@ -1154,15 +1147,19 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 		if(strm->sample_count == strm->sample_buffer_size) {
 			// transfer the data to the frame then compress it
 			av_transfer_pcm_to_frame(strm);
-			if(!av_encode_next_frame(strm, duration, p_time)) {
+			if(!av_encode_next_frame(strm, time)) {
 				return FALSE;
 			}
 			strm->sample_count = 0;
 			dst_samples = strm->samples;
+
+			// adjust the time
+			time += samples_to_copy * (1 / 44100.0 / 2);
 		}
-	}*/
+	}
 	return TRUE;
 }
+
 
 static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time TSRMLS_DC) {
 	if(av_decode_next_frame(strm, p_time TSRMLS_CC)) {
@@ -1171,7 +1168,7 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 		av_create_audio_buffer_and_resampler(strm, FOR_DECODING);
 		av_transfer_pcm_from_frame(strm);
 
-		data_len = sizeof(int16_t) * 2 * strm->sample_buffer_size;
+		data_len = sizeof(float) * 2 * strm->sample_buffer_size;
 		if(Z_TYPE_P(buffer) == IS_STRING) {
 			Z_STRVAL_P(buffer) = erealloc(Z_STRVAL_P(buffer), data_len + 1);
 		} else {

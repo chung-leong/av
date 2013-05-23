@@ -25,7 +25,7 @@ if test "$PHP_AV" != "no"; then
   PHP_ADD_INCLUDE($AV_DIR/include/libavformat/)
   PHP_ADD_INCLUDE($AV_DIR/include/libavfilter/)
   PHP_ADD_INCLUDE($AV_DIR/include/libswscale/)      
-  PHP_ADD_INCLUDE($AV_DIR/include/libavdevice/)
+  PHP_ADD_INCLUDE($AV_DIR/include/libswresample/)
               
   if test -z "$AV_DIR"; then
      AC_MSG_RESULT([not found])
@@ -63,7 +63,7 @@ if test "$PHP_AV" != "no"; then
   PHP_CHECK_LIBRARY(avformat,avio_open,
   [
     PHP_ADD_LIBRARY_WITH_PATH(avformat, $AV_DIR/lib, AV_SHARED_LIBADD)
-    AC_DEFINE(HAVE_AVLIB,1,[ ])
+    AC_DEFINE(HAVE_AVFORMAT,1,[ ])
   ],[
     AC_MSG_ERROR([wrong libavformat lib version or lib not found])
   ],[
@@ -73,9 +73,9 @@ if test "$PHP_AV" != "no"; then
   PHP_CHECK_LIBRARY(avutil,av_dict_get,
   [
     PHP_ADD_LIBRARY_WITH_PATH(avutil, $AV_DIR/lib, AV_SHARED_LIBADD)
-    AC_DEFINE(HAVE_AVLIB,1,[ ])
+    AC_DEFINE(HAVE_AVUTIL,1,[ ])
   ],[
-    AC_MSG_ERROR([wrong libavformat lib version or lib not found])
+    AC_MSG_ERROR([wrong libavutil lib version or lib not found])
   ],[
     -L$AV_DIR/lib -lm
   ]) 
@@ -83,9 +83,19 @@ if test "$PHP_AV" != "no"; then
   PHP_CHECK_LIBRARY(swscale,sws_scale,
   [
     PHP_ADD_LIBRARY_WITH_PATH(swscale, $AV_DIR/lib, AV_SHARED_LIBADD)
-    AC_DEFINE(HAVE_AVLIB,1,[ ])
+    AC_DEFINE(HAVE_SWSCALE,1,[ ])
   ],[
     AC_MSG_ERROR([wrong libswscale lib version or lib not found])
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
+
+  PHP_CHECK_LIBRARY(swresample,swr_convert,
+  [
+    PHP_ADD_LIBRARY_WITH_PATH(swresample, $AV_DIR/lib, AV_SHARED_LIBADD)
+    AC_DEFINE(HAVE_SWSRESAMPLE,1,[ ])
+  ],[
+    AC_MSG_ERROR([wrong libswresample lib version or lib not found])
   ],[
     -L$AV_DIR/lib -lm
   ]) 
