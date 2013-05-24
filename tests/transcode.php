@@ -3,7 +3,7 @@
 $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
 $file_in = av_file_open("$folder/source-code.mov", "rb");
-$file_out = av_file_open("$folder/source-code-output.webm", "wb");
+$file_out = av_file_open("$folder/source-code-output.mp4", "wb");
 
 $a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");

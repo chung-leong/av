@@ -1043,6 +1043,7 @@ static void av_transfer_picture_to_frame(av_stream *strm) {
 		avpicture_alloc((AVPicture *) strm->frame, strm->codec_cxt->pix_fmt, strm->codec_cxt->width, strm->codec_cxt->height);
 		strm->frame->width = strm->codec_cxt->width;
 		strm->frame->height = strm->codec_cxt->height;
+		strm->frame->format = strm->codec_cxt->pix_fmt;
 	}
 	// rescale the picture to the proper dimension and transform pixels to format used by codec
 	sws_scale(strm->scalar_cxt, (const uint8_t * const *) strm->picture->data, strm->picture->linesize, 0, strm->picture->height, strm->frame->data, strm->frame->linesize);
