@@ -88,6 +88,7 @@ enum {
 };
 
 enum {
+	AV_STREAM_PICTURE_ALLOCATED	= 0x2000,
 	AV_STREAM_SOUGHT			= 0x4000,
 	AV_STREAM_FREED				= 0x8000,
 };

@@ -180,6 +180,9 @@ static void av_free_file(av_file *file) {
 			if(strm) {
 				avcodec_close(strm->codec_cxt);
 				if(strm->frame) {
+					if(strm->flags & AV_STREAM_PICTURE_ALLOCATED) {
+						avpicture_free((AVPicture *) strm->frame);
+					}
 					avcodec_free_frame(&strm->frame);
 				}
 				if(strm->next_frame) {
@@ -212,11 +215,10 @@ static void av_free_file(av_file *file) {
 				efree(strm);
 			}
 		}
-		efree(file->streams);
-
-		if(file->flags & AV_FILE_READ) {
-			avformat_close_input(&file->format_cxt);
+		if(file->streams) {
+			efree(file->streams);
 		}
+		avformat_close_input(&file->format_cxt);
 		efree(file);
 	}
 }
@@ -225,7 +227,7 @@ static void av_free_stream(av_stream *strm) {
 	if(!(strm->flags & AV_STREAM_FREED)) {
 		av_file *file = strm->file;
 		file->open_stream_count--;
-		strm->flags &= AV_STREAM_FREED;
+		strm->flags |= AV_STREAM_FREED;
 		if(file->open_stream_count == 0) {
 			if(file->flags & AV_FILE_FREED) {
 				// free the file if no zval is referencing it
@@ -361,6 +363,10 @@ PHP_MSHUTDOWN_FUNCTION(av)
 
 void *custom_malloc(size_t size) {
 	void *p = emalloc(size);
+	if(size == 8224) {
+		efree(p);
+		p = emalloc(size);
+	}
 	return p;
 }
 
@@ -1169,11 +1175,12 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 
 static void av_transfer_picture_to_frame(av_stream *strm) {
 	// allocate the frame buffer if it's not there
-	if(!strm->frame->data[0]) {
+	if(!(strm->flags & AV_STREAM_PICTURE_ALLOCATED)) {
 		avpicture_alloc((AVPicture *) strm->frame, strm->codec_cxt->pix_fmt, strm->codec_cxt->width, strm->codec_cxt->height);
 		strm->frame->width = strm->codec_cxt->width;
 		strm->frame->height = strm->codec_cxt->height;
 		strm->frame->format = strm->codec_cxt->pix_fmt;
+		strm->flags |= AV_STREAM_PICTURE_ALLOCATED;
 	}
 	// rescale the picture to the proper dimension and transform pixels to format used by codec
 	sws_scale(strm->scalar_cxt, (const uint8_t * const *) strm->picture->data, strm->picture->linesize, 0, strm->picture->height, strm->frame->data, strm->frame->linesize);
