@@ -34,12 +34,12 @@ while(!av_file_eof($file_in)) {
 	}
 }
 
+av_file_close($file_out);
 av_stream_close($a_strm_out);
 av_stream_close($v_strm_out);
-av_file_close($file_out);
 
+av_file_close($file_in);
 av_stream_close($a_strm_in);
 av_stream_close($v_strm_in);
-av_file_close($file_in);
 
 ?>

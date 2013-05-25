@@ -180,8 +180,10 @@ static void av_free_file(av_file *file) {
 			if(strm) {
 				avcodec_close(strm->codec_cxt);
 				if(strm->frame) {
-					if(strm->flags & AV_STREAM_PICTURE_ALLOCATED) {
+					if(strm->flags & AV_STREAM_FRAME_BUFFER_ALLOCATED) {
 						avpicture_free((AVPicture *) strm->frame);
+					} else if(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED) {
+						av_free(strm->frame->extended_data[0]);
 					}
 					avcodec_free_frame(&strm->frame);
 				}
@@ -363,10 +365,6 @@ PHP_MSHUTDOWN_FUNCTION(av)
 
 void *custom_malloc(size_t size) {
 	void *p = emalloc(size);
-	if(size == 8224) {
-		efree(p);
-		p = emalloc(size);
-	}
 	return p;
 }
 
@@ -1175,12 +1173,12 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 
 static void av_transfer_picture_to_frame(av_stream *strm) {
 	// allocate the frame buffer if it's not there
-	if(!(strm->flags & AV_STREAM_PICTURE_ALLOCATED)) {
+	if(!(strm->flags & AV_STREAM_FRAME_BUFFER_ALLOCATED)) {
 		avpicture_alloc((AVPicture *) strm->frame, strm->codec_cxt->pix_fmt, strm->codec_cxt->width, strm->codec_cxt->height);
 		strm->frame->width = strm->codec_cxt->width;
 		strm->frame->height = strm->codec_cxt->height;
 		strm->frame->format = strm->codec_cxt->pix_fmt;
-		strm->flags |= AV_STREAM_PICTURE_ALLOCATED;
+		strm->flags |= AV_STREAM_FRAME_BUFFER_ALLOCATED;
 	}
 	// rescale the picture to the proper dimension and transform pixels to format used by codec
 	sws_scale(strm->scalar_cxt, (const uint8_t * const *) strm->picture->data, strm->picture->linesize, 0, strm->picture->height, strm->frame->data, strm->frame->linesize);
@@ -1195,13 +1193,14 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 	int result;
 
 	// allocate the audio frame if it's not there
-	if(!strm->frame->data[0]) {
+	if(!(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED)) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
 	    float *samples = av_malloc(buffer_size);
 
 	    strm->frame->format = strm->codec_cxt->sample_fmt;
 	    strm->frame->nb_samples = strm->codec_cxt->frame_size;
 		avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, (uint8_t *) samples, buffer_size, 1);
+		strm->flags |= AV_STREAM_AUDIO_BUFFER_ALLOCATED;
 	}
 
 	result = swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_buffer_size);
