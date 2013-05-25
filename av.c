@@ -45,6 +45,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_av_file_close, 0, 0, 1)
     ZEND_ARG_INFO(0, file)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_av_file_seek, 0, 0, 2)
+	ZEND_ARG_INFO(0, file)
+	ZEND_ARG_INFO(0, time)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_av_file_eof, 0, 0, 1)
     ZEND_ARG_INFO(0, file)
 ZEND_END_ARG_INFO()
@@ -99,6 +104,7 @@ ZEND_END_ARG_INFO()
 const zend_function_entry av_functions[] = {
 	PHP_FE(av_file_open,				arginfo_av_file_open)
 	PHP_FE(av_file_close,				arginfo_av_file_close)
+	PHP_FE(av_file_seek,				arginfo_av_file_seek)
 	PHP_FE(av_file_eof,					arginfo_av_file_eof)
 	PHP_FE(av_file_stat,				arginfo_av_file_stat)
 
@@ -509,20 +515,116 @@ PHP_FUNCTION(av_file_open)
    Close an av file */
 PHP_FUNCTION(av_file_close)
 {
-	zval *z_strm;
+	zval *z_file;
 	av_file *file;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_strm) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(file, av_file *, &z_strm, -1, "av file", le_av_file);
+	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
 	if(file->open_stream_count == 0) {
 		RETVAL_TRUE;
 	} else {
 		RETVAL_FALSE;
 	}
-	zend_list_delete(Z_LVAL_P(z_strm));
+	zend_list_delete(Z_LVAL_P(z_file));
+}
+/* }}} */
+
+static int av_seek_file(av_file *file, double time) {
+	double time_unit;
+	int64_t min_time_stamp, time_stamp, max_time_stamp;
+	int32_t stream_index = -1;
+	uint32_t i;
+
+	// get rid of packets that were placed in each stream's queue
+	for(i = 0; i < file->stream_count; i++) {
+		av_stream *strm = file->streams[i];
+		if(strm) {
+			while(strm->packet) {
+				av_shift_packet(strm);
+			}
+		}
+	}
+
+	// use the video stream if there's one opened
+	for(i = 0; i < file->stream_count; i++) {
+		av_stream *strm = file->streams[i];
+		if(strm && !(strm->flags & AV_STREAM_FREED)) {
+			if(strm->codec->type == AVMEDIA_TYPE_VIDEO) {
+				stream_index = i;
+				break;
+			}
+		}
+	}
+
+	// use the first opened stream
+	if(stream_index == -1) {
+		for(i = 0; i < file->stream_count; i++) {
+			av_stream *strm = file->streams[i];
+			if(strm && !(strm->flags & AV_STREAM_FREED)) {
+				stream_index = i;
+				break;
+			}
+		}
+	}
+
+	// use the best video stream if no stream was opened
+	if(stream_index == -1) {
+		int32_t best_stream_index = av_find_best_stream(file->format_cxt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
+		if(best_stream_index >= 0) {
+			stream_index = best_stream_index;
+		}
+	}
+
+	// let ffmpeg choose the stream otherwise
+	if(stream_index == -1) {
+		time_unit = 1.0 / AV_TIME_BASE;
+	} else {
+		AVStream *s = file->format_cxt->streams[stream_index];
+		time_unit = av_q2d(s->time_base);
+	}
+
+	// not setting a minimum--decode to the correct position if we have to
+	// never seek beyond the time given
+	min_time_stamp = -1 / time_unit;
+	time_stamp = time / time_unit;
+	max_time_stamp = time_stamp;
+
+	if(avformat_seek_file(file->format_cxt, stream_index, min_time_stamp, time_stamp, max_time_stamp, 0) < 0) {
+		return FALSE;
+	}
+
+	// note that a seek has occured
+	for(i = 0; i < file->stream_count; i++) {
+		av_stream *strm = file->streams[i];
+		if(strm) {
+			strm->flags |= AV_STREAM_SOUGHT;
+			strm->target_pts = time_stamp;
+		}
+	}
+	return TRUE;
+}
+
+/* {{{ proto string av_file_seek(resource file, double time)
+   Seek to a specific time */
+PHP_FUNCTION(av_file_seek)
+{
+	zval *z_file;
+	av_file *file;
+	double time;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rd", &z_file, &time) == FAILURE) {
+		return;
+	}
+
+	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
+	if(av_seek_file(file, time)) {
+		RETVAL_TRUE;
+	} else {
+		RETVAL_FALSE;
+	}
 }
 /* }}} */
 
@@ -530,15 +632,15 @@ PHP_FUNCTION(av_file_close)
    Indicate whether there's more contents */
 PHP_FUNCTION(av_file_eof)
 {
-	zval *z_strm;
+	zval *z_file;
 	av_file *file;
 	int32_t eof = FALSE;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_strm) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(file, av_file *, &z_strm, -1, "av file", le_av_file);
+	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
 
 	if(file->flags & AV_FILE_EOF_REACHED) {
 		uint32_t i;
@@ -600,7 +702,7 @@ static uint32_t av_get_name_length(const char *s) {
    Return information about media file */
 PHP_FUNCTION(av_file_stat)
 {
-	zval *z_strm;
+	zval *z_file;
 	av_file *file;
 	AVFormatContext *f;
 	zval *streams, *metadata;
@@ -608,11 +710,11 @@ PHP_FUNCTION(av_file_stat)
 	AVDictionaryEntry *e;
 	const char *format, *format_name;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_strm) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
 	}
 
-	ZEND_FETCH_RESOURCE(file, av_file *, &z_strm, -1, "av file", le_av_file);
+	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
 	f = file->format_cxt;
 
 	array_init(return_value);

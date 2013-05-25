@@ -51,6 +51,7 @@ struct av_stream {
 
 	AVFrame *frame;						// the current frame
 	int64_t frame_pts;					// the PTS of the packet that triggered the creation of the frame (used during decoding only)
+	AVFrame *next_frame;
 
 	AVFrame *picture;					// RGBA picture
 	struct SwsContext *scalar_cxt;		// scalar context
@@ -69,6 +70,8 @@ struct av_stream {
 	av_file *file;						// AV file containing this stream
 	uint32_t index;						// index of this stream
 
+	uint64_t target_pts;				// position that was sought
+
 	int32_t flags;
 };
 
@@ -84,6 +87,7 @@ enum {
 };
 
 enum {
+	AV_STREAM_SOUGHT			= 0x4000,
 	AV_STREAM_FREED				= 0x8000,
 };
 
@@ -106,6 +110,7 @@ PHP_MINFO_FUNCTION(av);
 
 PHP_FUNCTION(av_file_open);
 PHP_FUNCTION(av_file_close);
+PHP_FUNCTION(av_file_seek);
 PHP_FUNCTION(av_file_eof);
 PHP_FUNCTION(av_file_stat);
 
