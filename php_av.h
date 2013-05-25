@@ -52,6 +52,7 @@ struct av_stream {
 	AVFrame *frame;						// the current frame
 	int64_t frame_pts;					// the PTS of the packet that triggered the creation of the frame (used during decoding only)
 	AVFrame *next_frame;
+	double next_frame_time;
 
 	AVFrame *picture;					// RGBA picture
 	struct SwsContext *scalar_cxt;		// scalar context
@@ -70,7 +71,7 @@ struct av_stream {
 	av_file *file;						// AV file containing this stream
 	uint32_t index;						// index of this stream
 
-	uint64_t target_pts;				// position that was sought
+	double time_sought;					// time passed to av_file_seek()
 
 	int32_t flags;
 };

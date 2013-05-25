@@ -186,6 +186,12 @@ static void av_free_file(av_file *file) {
 			av_stream *strm = file->streams[i];
 			if(strm) {
 				avcodec_close(strm->codec_cxt);
+				if(strm->frame) {
+					avcodec_free_frame(&strm->frame);
+				}
+				if(strm->next_frame) {
+					avcodec_free_frame(&strm->next_frame);
+				}
 				if(strm->resampler_cxt) {
 					swr_free(&strm->resampler_cxt);
 				}
@@ -601,7 +607,7 @@ static int av_seek_file(av_file *file, double time) {
 		av_stream *strm = file->streams[i];
 		if(strm) {
 			strm->flags |= AV_STREAM_SOUGHT;
-			strm->target_pts = time_stamp;
+			strm->time_sought = time;
 		}
 	}
 	return TRUE;
@@ -1282,20 +1288,20 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 	return TRUE;
 }
 
-static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
+static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, double *p_time TSRMLS_DC) {
 	int frame_finished = FALSE;
 	for(;;) {
 		int bytes_decoded;
 		if(av_read_next_packet(strm TSRMLS_CC)) {
 			switch(strm->codec->type) {
 				case AVMEDIA_TYPE_VIDEO:
-					bytes_decoded = avcodec_decode_video2(strm->codec_cxt, strm->frame, &frame_finished, strm->packet);
+					bytes_decoded = avcodec_decode_video2(strm->codec_cxt, dest_frame, &frame_finished, strm->packet);
 					break;
 				case AVMEDIA_TYPE_AUDIO:
-					bytes_decoded = avcodec_decode_audio4(strm->codec_cxt, strm->frame, &frame_finished, strm->packet);
+					bytes_decoded = avcodec_decode_audio4(strm->codec_cxt, dest_frame, &frame_finished, strm->packet);
 					break;
 				case AVMEDIA_TYPE_SUBTITLE:
-					//bytes_decoded = avcodec_decode_subtitle2(strm->codec_cxt, dec->frame, &audio_frame_finished, strm->packet);
+					//bytes_decoded = avcodec_decode_subtitle2(strm->codec_cxt, dest_frame, &frame_finished, strm->packet);
 					break;
 				default:
 					bytes_decoded = -1;
@@ -1329,6 +1335,57 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 		av_shift_packet(strm);
 	}
 	return TRUE;
+}
+
+static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
+	if(strm->flags & AV_STREAM_SOUGHT) {
+		// keep decoding frames until we have two frames straddling the time sought
+		AVFrame *current_frame = strm->frame, *next_frame = NULL;
+		double current_frame_time, next_frame_time;
+		do {
+			if(next_frame) {
+				// the one read earlier become the current frame
+				AVFrame *current_frame_temp = current_frame;
+				current_frame_time = next_frame_time;
+				current_frame = next_frame;
+				next_frame = current_frame_temp;
+			} else {
+				// decode the current frame
+				if(!av_decode_frame_at_cursor(strm, current_frame, &current_frame_time TSRMLS_DC)) {
+					return FALSE;
+				}
+				if(current_frame_time == strm->time_sought) {
+					// we have an exact match--no need to do more
+					break;
+				}
+				next_frame = av_frame_alloc();
+			}
+			// read the next frame so we can check if the current frame is the closest
+			// to the time sought without going over
+			if(av_decode_frame_at_cursor(strm, next_frame, &next_frame_time TSRMLS_DC) < 0) {
+			    avcodec_free_frame(&next_frame);
+			    next_frame = NULL;
+				break;
+			}
+		} while(!(current_frame_time <= strm->time_sought && strm->time_sought < next_frame_time));
+
+		strm->flags &= ~AV_STREAM_SOUGHT;
+		strm->frame = current_frame;
+		strm->next_frame = next_frame;
+		strm->next_frame_time = next_frame_time;
+		*p_time = current_frame_time;
+	} else {
+		if(strm->next_frame) {
+			// free the current frame and use the next frame
+		    avcodec_free_frame(&strm->frame);
+		    strm->frame = strm->next_frame;
+		    *p_time = strm->next_frame_time;
+		    strm->next_frame = NULL;
+		    strm->next_frame_time = 0;
+		} else {
+			av_decode_frame_at_cursor(strm, strm->frame, p_time TSRMLS_DC);
+		}
+	}
 }
 
 static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double time TSRMLS_DC) {
