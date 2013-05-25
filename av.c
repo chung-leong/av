@@ -71,13 +71,13 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_read_image, 0, 0, 2)
     ZEND_ARG_INFO(0, stream)
     ZEND_ARG_INFO(0, image)
-    ZEND_ARG_INFO(0, time)
+    ZEND_ARG_INFO(1, time)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_read_pcm, 0, 0, 2)
     ZEND_ARG_INFO(0, stream)
     ZEND_ARG_INFO(1, buffer)
-    ZEND_ARG_INFO(0, time)
+    ZEND_ARG_INFO(1, time)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_write_image, 0, 0, 2)
@@ -92,9 +92,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_write_pcm, 0, 0, 2)
     ZEND_ARG_INFO(0, time)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_get_duration, 0, 0, 1)
-    ZEND_ARG_INFO(0, stream)
-ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ av_functions[]
@@ -114,7 +111,6 @@ const zend_function_entry av_functions[] = {
 	PHP_FE(av_stream_read_pcm,			arginfo_av_stream_read_pcm)
 	PHP_FE(av_stream_write_image,		arginfo_av_stream_write_image)
 	PHP_FE(av_stream_write_pcm,			arginfo_av_stream_write_pcm)
-	PHP_FE(av_stream_get_duration,		arginfo_av_stream_get_duration)
 
 	PHP_FE_END	/* Must be the last line in av_functions[] */
 };
@@ -177,9 +173,6 @@ static void av_free_file(av_file *file) {
 				av_write_trailer(file->format_cxt);
 			}
 		}
-		if(file->flags & AV_FILE_READ) {
-			avformat_close_input(&file->format_cxt);
-		}
 
 		// free the streams
 		for(i = 0; i < file->stream_count; i++) {
@@ -191,6 +184,13 @@ static void av_free_file(av_file *file) {
 				}
 				if(strm->next_frame) {
 					avcodec_free_frame(&strm->next_frame);
+				}
+				if(strm->picture) {
+					avpicture_free((AVPicture *) strm->picture);
+					avcodec_free_frame(&strm->picture);
+				}
+				if(strm->scalar_cxt) {
+					sws_freeContext(strm->scalar_cxt);
 				}
 				if(strm->resampler_cxt) {
 					swr_free(&strm->resampler_cxt);
@@ -213,6 +213,10 @@ static void av_free_file(av_file *file) {
 			}
 		}
 		efree(file->streams);
+
+		if(file->flags & AV_FILE_READ) {
+			avformat_close_input(&file->format_cxt);
+		}
 		efree(file);
 	}
 }
@@ -337,7 +341,6 @@ PHP_MINIT_FUNCTION(av)
 
 	av_register_all();
 	avcodec_register_all();
-
 	le_av_file = zend_register_list_destructors_ex(php_free_av_file, NULL, "av file", module_number);
 	le_av_strm = zend_register_list_destructors_ex(php_free_av_stream, NULL, "av stream", module_number);
 
@@ -356,6 +359,22 @@ PHP_MSHUTDOWN_FUNCTION(av)
 }
 /* }}} */
 
+void *custom_malloc(size_t size) {
+	void *p = emalloc(size);
+	return p;
+}
+
+void *custom_realloc(void *ptr, size_t size) {
+	void *p = erealloc(ptr, size);
+	return p;
+}
+
+void custom_free(void *ptr) {
+	if(ptr) {
+		efree(ptr);
+	}
+}
+
 /* Remove if there's nothing to do at request start */
 /* {{{ PHP_RINIT_FUNCTION
  */
@@ -366,6 +385,8 @@ PHP_RINIT_FUNCTION(av)
 	}
 	AV_G(video_buffer) = NULL;
 	AV_G(video_buffer_size) = 0;
+	av_set_custom_malloc(custom_malloc, custom_realloc, custom_free);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -378,6 +399,7 @@ PHP_RSHUTDOWN_FUNCTION(av)
 	if(AV_G(video_buffer)) {
 		efree(AV_G(video_buffer));
 	}
+	//av_set_custom_malloc(NULL, NULL, NULL);
 	return SUCCESS;
 }
 /* }}} */
@@ -1566,24 +1588,6 @@ PHP_FUNCTION(av_stream_read_pcm)
 	} else {
 		RETVAL_FALSE;
 	}
-}
-/* }}} */
-
-/* {{{ proto string av_stream_get_duration(resource res)
-   Get duration of av stream */
-PHP_FUNCTION(av_stream_get_duration)
-{
-	zval *z_strm;
-	av_stream *strm;
-	double duration;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_strm) == FAILURE) {
-		return;
-	}
-	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
-
-	duration = strm->stream->duration * av_q2d(strm->stream->time_base);
-	RETVAL_DOUBLE(duration);
 }
 /* }}} */
 
