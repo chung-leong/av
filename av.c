@@ -636,6 +636,9 @@ static int av_seek_file(av_file *file, double time) {
 			strm->time_sought = time;
 		}
 	}
+
+	// clear eof flag
+	file->flags &= ~AV_FILE_EOF_REACHED;
 	return TRUE;
 }
 
@@ -871,9 +874,9 @@ PHP_FUNCTION(av_stream_open)
 		}
 		codec_cxt->get_buffer = av_stream_get_buffer;
 	} else if(file->flags & AV_FILE_WRITE){
-		double frame_rate = av_get_option_double(z_options, "frame rate", 25.0);
-		uint32_t sample_rate = av_get_option_long(z_options, "sampling rate", 44100);
-		uint32_t bit_rate = av_get_option_long(z_options, "bit rate", 256000);
+		double frame_rate = av_get_option_double(z_options, "frame_rate", 25.0);
+		uint32_t sample_rate = av_get_option_long(z_options, "sampling_rate", 44100);
+		uint32_t bit_rate = av_get_option_long(z_options, "bit_rate", 256000);
 		uint32_t width = av_get_option_long(z_options, "width", 320);
 		uint32_t height = av_get_option_long(z_options, "height", 240);
 		enum AVMediaType media_type;
@@ -909,6 +912,9 @@ PHP_FUNCTION(av_stream_open)
 		stream_index = stream->index;
 
 		codec_cxt = stream->codec;
+	    if(file->output_format->flags & AVFMT_GLOBALHEADER) {
+	    	codec_cxt->flags |= CODEC_FLAG_GLOBAL_HEADER;
+	    }
 		if(codec->capabilities & CODEC_CAP_EXPERIMENTAL) {
 			codec_cxt->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 		}
@@ -931,6 +937,7 @@ PHP_FUNCTION(av_stream_open)
 				codec_cxt->channel_layout = AV_CH_LAYOUT_STEREO;
 				codec_cxt->channels = 2;
 				codec_cxt->global_quality = 3540;
+				codec_cxt->bit_rate = bit_rate;
 				codec_cxt->flags |= CODEC_FLAG_QSCALE;
 				break;
 			case AVMEDIA_TYPE_SUBTITLE:
@@ -947,9 +954,6 @@ PHP_FUNCTION(av_stream_open)
 
 		frame = avcodec_alloc_frame();
 		frame->pts = 0;
-	    if(file->output_format->flags & AVFMT_GLOBALHEADER) {
-	    	codec_cxt->flags |= CODEC_FLAG_GLOBAL_HEADER;
-	    }
 	}
 
 	strm = emalloc(sizeof(av_stream));

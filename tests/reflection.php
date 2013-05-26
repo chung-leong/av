@@ -5,12 +5,12 @@ $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
 $canvas = imagecreatetruecolor(800, 600);
 $file_in = av_file_open("$folder/source-code.mov", "rb");
-$file_out = av_file_open("$folder/source-code-reflection.webm", "wb");
+$file_out = av_file_open("$folder/source-code-reflection.mp4", "wb");
 
-$a_strm_in = av_stream_open($file_in, "audio");
+//$a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");
 
-$a_strm_out = av_stream_open($file_out, "audio");
+//$a_strm_out = av_stream_open($file_out, "audio");
 $v_strm_out = av_stream_open($file_out, "video", array( "width" => imagesx($canvas), "height" => imagesy($canvas)));
 
 $filter = new ReflectionFilter;
@@ -22,7 +22,7 @@ $background_color = imagecolorallocate($canvas, 0, 0, 0);
 $v_time = 0;
 $a_time = 0;
 while(!av_file_eof($file_in)) {
-	if($v_time < $a_time || !$a_strm_in) {
+	if($v_time < $a_time || !isset($a_strm_in)) {
 		if(av_stream_read_image($v_strm_in, $image, $v_time)) {
 			imagefilledrectangle($canvas, 0, 0, $canvas_width, $canvas_height, $background_color);
 			$filter->draw($canvas, $image);
@@ -41,11 +41,11 @@ while(!av_file_eof($file_in)) {
 	}
 }
 
-av_stream_close($a_strm_out);
+//av_stream_close($a_strm_out);
 av_stream_close($v_strm_out);
 av_file_close($file_out);
 
-av_stream_close($a_strm_in);
+//av_stream_close($a_strm_in);
 av_stream_close($v_strm_in);
 av_file_close($file_in);
 
