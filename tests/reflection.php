@@ -5,13 +5,17 @@ $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
 $canvas = imagecreatetruecolor(800, 600);
 $file_in = av_file_open("$folder/source-code.mov", "rb");
-$file_out = av_file_open("$folder/source-code-reflection.mp4", "wb");
+$file_out1 = av_file_open("$folder/source-code-reflection.webm", "wb");
+$file_out2 = av_file_open("$folder/source-code-reflection.mp4", "wb");
 
-//$a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");
+$a_strm_in = av_stream_open($file_in, "audio");
 
-//$a_strm_out = av_stream_open($file_out, "audio");
-$v_strm_out = av_stream_open($file_out, "video", array( "width" => imagesx($canvas), "height" => imagesy($canvas)));
+$v_strm_out1 = av_stream_open($file_out1, "video", array( "width" => imagesx($canvas), "height" => imagesy($canvas)));
+$a_strm_out1 = av_stream_open($file_out1, "audio", array( "bit_rate" => 64000 ));
+
+$v_strm_out2 = av_stream_open($file_out2, "video", array( "width" => imagesx($canvas), "height" => imagesy($canvas)));
+$a_strm_out2 = av_stream_open($file_out2, "audio", array( "bit_rate" => 64000 ));
 
 $filter = new ReflectionFilter;
 $filter->bottom = 0.70;
@@ -26,14 +30,16 @@ while(!av_file_eof($file_in)) {
 		if(av_stream_read_image($v_strm_in, $image, $v_time)) {
 			imagefilledrectangle($canvas, 0, 0, $canvas_width, $canvas_height, $background_color);
 			$filter->draw($canvas, $image);
-			av_stream_write_image($v_strm_out, $canvas, $v_time);
+			av_stream_write_image($v_strm_out1, $canvas, $v_time);
+			av_stream_write_image($v_strm_out2, $canvas, $v_time);
 			echo "V: $v_time\n";
 		} else {
 			$v_time = INF;
 		}
 	} else {
 		if(av_stream_read_pcm($a_strm_in, $pcm, $a_time)) {
-			av_stream_write_pcm($a_strm_out, $pcm, $a_time);
+			av_stream_write_pcm($a_strm_out1, $pcm, $a_time);
+			av_stream_write_pcm($a_strm_out2, $pcm, $a_time);
 			echo "A: $a_time\n";
 		} else {
 			$a_time = INF;
@@ -41,11 +47,15 @@ while(!av_file_eof($file_in)) {
 	}
 }
 
-//av_stream_close($a_strm_out);
-av_stream_close($v_strm_out);
-av_file_close($file_out);
+av_stream_close($a_strm_out1);
+av_stream_close($v_strm_out1);
+av_file_close($file_out1);
 
-//av_stream_close($a_strm_in);
+av_stream_close($a_strm_out2);
+av_stream_close($v_strm_out2);
+av_file_close($file_out2);
+
+av_stream_close($a_strm_in);
 av_stream_close($v_strm_in);
 av_file_close($file_in);
 

@@ -363,19 +363,44 @@ PHP_MSHUTDOWN_FUNCTION(av)
 }
 /* }}} */
 
+size_t extra = 100;
+size_t extra2 = 1;
+
 void *custom_malloc(size_t size) {
-	void *p = emalloc(size);
-	return p;
+	size_t i;
+	size_t *p = emalloc(sizeof(size_t) * extra2 + size + extra);
+	int8_t *e = ((int8_t *) (p + extra2)) + size;
+	for(i = 0; i < extra; i++) {
+		e[i] = 'K';
+	}
+	*p = size;
+	return p + extra2;
 }
 
 void *custom_realloc(void *ptr, size_t size) {
-	void *p = erealloc(ptr, size);
-	return p;
+	size_t i;
+	size_t *p = erealloc(((size_t *) ptr) - extra2, sizeof(size_t) * extra2 + size + extra);
+	int8_t *e = ((int8_t *) (p + extra2)) + size;
+	for(i = 0; i < extra; i++) {
+		e[i] = 'K';
+	}
+	*p = size;
+	return p + extra2;
 }
 
 void custom_free(void *ptr) {
 	if(ptr) {
-		efree(ptr);
+		size_t *p = ((size_t *) ptr) - extra2;
+		size_t size = *p;
+		size_t i;
+		int8_t *e = ((int8_t *) (p + extra2)) + size;
+		for(i = 0; i < extra; i++) {
+			if(e[i] != 'K') {
+				raise(SIGINT);
+				break;
+			}
+		}
+		efree(p);
 	}
 }
 
@@ -389,7 +414,7 @@ PHP_RINIT_FUNCTION(av)
 	}
 	AV_G(video_buffer) = NULL;
 	AV_G(video_buffer_size) = 0;
-	av_set_custom_malloc(custom_malloc, custom_realloc, custom_free);
+	//av_set_custom_malloc(custom_malloc, custom_realloc, custom_free);
 
 	return SUCCESS;
 }
@@ -1194,8 +1219,6 @@ static void av_transfer_picture_from_frame(av_stream *strm) {
 }
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
-	int result;
-
 	// allocate the audio frame if it's not there
 	if(!(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED)) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
@@ -1206,14 +1229,11 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 		avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, (uint8_t *) samples, buffer_size, 1);
 		strm->flags |= AV_STREAM_AUDIO_BUFFER_ALLOCATED;
 	}
-
-	result = swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_buffer_size);
+	swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_count);
 }
 
 static void av_transfer_pcm_from_frame(av_stream *strm) {
-	int result;
-
-	result = swr_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, strm->sample_buffer_size, (const uint8_t **) strm->frame->data, strm->frame->nb_samples);
+	strm->sample_count = swr_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, strm->sample_buffer_size, (const uint8_t **) strm->frame->data, strm->frame->nb_samples);
 }
 
 static void av_copy_image_from_gd(AVFrame *picture, gdImagePtr image) {
@@ -1293,7 +1313,6 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 	av_init_packet(packet);
 	packet->data = NULL;
 	packet->size = 0;
-	packet->priv = NULL;
 
 	switch(strm->codec->type) {
 		case AVMEDIA_TYPE_VIDEO:
@@ -1415,9 +1434,10 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 		    strm->next_frame = NULL;
 		    strm->next_frame_time = 0;
 		} else {
-			av_decode_frame_at_cursor(strm, strm->frame, p_time TSRMLS_DC);
+			return av_decode_frame_at_cursor(strm, strm->frame, p_time TSRMLS_DC);
 		}
 	}
+	return TRUE;
 }
 
 static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double time TSRMLS_DC) {
@@ -1488,7 +1508,7 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 		av_create_audio_buffer_and_resampler(strm, FOR_DECODING);
 		av_transfer_pcm_from_frame(strm);
 
-		data_len = sizeof(float) * 2 * strm->sample_buffer_size;
+		data_len = sizeof(float) * 2 * strm->sample_count;
 		if(Z_TYPE_P(buffer) == IS_STRING) {
 			Z_STRVAL_P(buffer) = erealloc(Z_STRVAL_P(buffer), data_len + 1);
 		} else {
