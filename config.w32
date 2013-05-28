@@ -8,6 +8,6 @@
 // ARG_ENABLE("av", "enable av support", "no");
 
 if (PHP_AV != "no") {
-	EXTENSION("av", "av.c");
+	EXTENSION("av", "av.c faststart.c");
 }
 

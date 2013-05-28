@@ -58,6 +58,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_av_file_stat, 0, 0, 1)
 	ZEND_ARG_INFO(0, stream)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_av_file_optimize, 0, 0, 1)
+	ZEND_ARG_INFO(0, path)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_open, 0, 0, 2)
     ZEND_ARG_INFO(0, file)
     ZEND_ARG_INFO(0, id)
@@ -104,6 +108,7 @@ const zend_function_entry av_functions[] = {
 	PHP_FE(av_file_seek,				arginfo_av_file_seek)
 	PHP_FE(av_file_eof,					arginfo_av_file_eof)
 	PHP_FE(av_file_stat,				arginfo_av_file_stat)
+	PHP_FE(av_file_optimize,			arginfo_av_file_optimize)
 
 	PHP_FE(av_stream_open,				arginfo_av_stream_open)
 	PHP_FE(av_stream_close,				arginfo_av_stream_close)
@@ -141,24 +146,26 @@ ZEND_GET_MODULE(av)
 
 /* {{{ PHP_INI
  */
-/* Remove comments and fill if you need to have entries in php.ini
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("av.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.optimize_output", "0", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
 PHP_INI_END()
-*/
 /* }}} */
 
 /* {{{ php_av_init_globals
  */
-/* Uncomment this function if you have INI entries
 static void php_av_init_globals(zend_av_globals *av_globals)
 {
-	av_globals->global_value = 0;
-	av_globals->global_string = NULL;
+	av_globals->optimize_output = TRUE;
 }
-*/
 /* }}} */
+
+static int av_is_qt_format(AVOutputFormat *of) {
+	AVOutputFormat *qt = av_guess_format("mov", NULL, NULL);
+	if(qt && qt->write_header == of->write_header && qt->write_packet == of->write_packet && qt->write_trailer == of->write_trailer) {
+		return TRUE;
+	}
+	return FALSE;
+}
 
 static int av_flush_pending_packets(av_file *file);
 
@@ -219,6 +226,14 @@ static void av_free_file(av_file *file) {
 		}
 		if(file->streams) {
 			efree(file->streams);
+		}
+		if(file->flags & AV_FILE_WRITE) {
+			if(AV_G(optimize_output)) {
+				if(av_is_qt_format(file->format_cxt->oformat)) {
+					avio_flush(file->format_cxt->pb);
+					av_optimize_mov_file(file->format_cxt->pb);
+				}
+			}
 		}
 		avformat_close_input(&file->format_cxt);
 		efree(file);
@@ -330,13 +345,6 @@ static int av_shift_packet(av_stream *strm) {
 	}
 }
 
-/* {{{ php_qb_init_globals
- */
-static void php_av_init_globals(zend_av_globals *av_globals)
-{
-}
-/* }}} */
-
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(av)
@@ -356,53 +364,30 @@ PHP_MINIT_FUNCTION(av)
  */
 PHP_MSHUTDOWN_FUNCTION(av)
 {
-	/* uncomment this line if you have INI entries
 	UNREGISTER_INI_ENTRIES();
-	*/
 	return SUCCESS;
 }
 /* }}} */
 
-size_t extra = 100;
-size_t extra2 = 1;
+#ifdef USE_CUSTOM_MALLOC
 
 void *custom_malloc(size_t size) {
-	size_t i;
-	size_t *p = emalloc(sizeof(size_t) * extra2 + size + extra);
-	int8_t *e = ((int8_t *) (p + extra2)) + size;
-	for(i = 0; i < extra; i++) {
-		e[i] = 'K';
-	}
-	*p = size;
-	return p + extra2;
+	void *p = emalloc(size);
+	return p;
 }
 
 void *custom_realloc(void *ptr, size_t size) {
-	size_t i;
-	size_t *p = erealloc(((size_t *) ptr) - extra2, sizeof(size_t) * extra2 + size + extra);
-	int8_t *e = ((int8_t *) (p + extra2)) + size;
-	for(i = 0; i < extra; i++) {
-		e[i] = 'K';
-	}
-	*p = size;
-	return p + extra2;
+	void *p = erealloc(ptr, size);
+	return p;
 }
 
 void custom_free(void *ptr) {
 	if(ptr) {
-		size_t *p = ((size_t *) ptr) - extra2;
-		size_t size = *p;
-		size_t i;
-		int8_t *e = ((int8_t *) (p + extra2)) + size;
-		for(i = 0; i < extra; i++) {
-			if(e[i] != 'K') {
-				raise(SIGINT);
-				break;
-			}
-		}
-		efree(p);
+		efree(ptr);
 	}
 }
+
+#endif
 
 /* Remove if there's nothing to do at request start */
 /* {{{ PHP_RINIT_FUNCTION
@@ -412,10 +397,13 @@ PHP_RINIT_FUNCTION(av)
 	if(le_gd == -1) {
 		le_gd = zend_fetch_list_dtor_id("gd");
 	}
+#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
 	AV_G(video_buffer) = NULL;
 	AV_G(video_buffer_size) = 0;
-	//av_set_custom_malloc(custom_malloc, custom_realloc, custom_free);
-
+#endif
+#ifdef USE_CUSTOM_MALLOC
+	av_set_custom_malloc(custom_malloc, custom_realloc, custom_free);
+#endif
 	return SUCCESS;
 }
 /* }}} */
@@ -425,10 +413,11 @@ PHP_RINIT_FUNCTION(av)
  */
 PHP_RSHUTDOWN_FUNCTION(av)
 {
+#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
 	if(AV_G(video_buffer)) {
 		efree(AV_G(video_buffer));
 	}
-	//av_set_custom_malloc(NULL, NULL, NULL);
+#endif
 	return SUCCESS;
 }
 /* }}} */
@@ -464,9 +453,7 @@ PHP_MINFO_FUNCTION(av)
 
 	php_info_print_table_end();
 
-	/* Remove comments if you have entries in php.ini
 	DISPLAY_INI_ENTRIES();
-	*/
 }
 /* }}} */
 
@@ -531,7 +518,7 @@ PHP_FUNCTION(av_file_open)
 		}
 
 		if(!(output_format->flags & AVFMT_NOFILE)) {
-			if(avio_open(&pb, filename, AVIO_FLAG_WRITE) < 0) {
+			if(avio_open(&pb, filename, AVIO_FLAG_READ_WRITE) < 0) {
 				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error opening file for writing: %s", filename);
 				return;
 			}
@@ -838,9 +825,49 @@ PHP_FUNCTION(av_file_stat)
 }
 /* }}} */
 
+static int av_optimize_file(AVIOContext *pb) {
+	return av_optimize_mov_file(pb);
+}
+
+/* {{{ proto string av_file_optimize(string arg)
+   Optimize a file */
+PHP_FUNCTION(av_file_optimize)
+{
+	char *filename;
+	int filename_len;
+	int result = FALSE;
+	AVIOContext *pb = NULL;
+	AVDictionary *options = NULL;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &filename, &filename_len) == FAILURE) {
+		return;
+	}
+
+	av_dict_set(&options, "truncate", "0", 0);
+	if(avio_open2(&pb, filename, AVIO_FLAG_READ_WRITE, NULL, &options) < 0) {
+		php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error opening file for writing: %s", filename);
+		av_dict_free(&options);
+		return;
+	}
+
+	result = av_optimize_file(pb);
+
+	avio_close(pb);
+	av_dict_free(&options);
+	RETURN_BOOL(result);
+}
+/* }}} */
+
 static int av_stream_get_buffer(AVCodecContext *c, AVFrame *pic) {
 	av_stream *strm = c->opaque;
 	int ret = avcodec_default_get_buffer(c, pic);
+	strm->frame_pts = strm->packet->pts;
+	return ret;
+}
+
+static int av_stream_get_buffer2(AVCodecContext *c, AVFrame *pic, int flags) {
+	av_stream *strm = c->opaque;
+	int ret = avcodec_default_get_buffer2(c, pic, flags);
 	strm->frame_pts = strm->packet->pts;
 	return ret;
 }
@@ -897,7 +924,8 @@ PHP_FUNCTION(av_stream_open)
 		if (codec_cxt->codec->capabilities & CODEC_CAP_TRUNCATED) {
 			codec_cxt->flags |= CODEC_FLAG_TRUNCATED;
 		}
-		codec_cxt->get_buffer = av_stream_get_buffer;
+		//codec_cxt->get_buffer = av_stream_get_buffer;
+		codec_cxt->get_buffer2 = av_stream_get_buffer2;
 	} else if(file->flags & AV_FILE_WRITE){
 		double frame_rate = av_get_option_double(z_options, "frame_rate", 25.0);
 		uint32_t sample_rate = av_get_option_long(z_options, "sampling_rate", 44100);
@@ -1110,7 +1138,6 @@ static void av_flush_remaining_frames(av_stream *strm) {
 			av_init_packet(packet);
 			packet->data = NULL;
 			packet->size = 0;
-			packet->priv = NULL;
 
 			switch(strm->codec->type) {
 				case AVMEDIA_TYPE_VIDEO:

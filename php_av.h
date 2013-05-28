@@ -105,6 +105,8 @@ struct av_file {
 	int32_t flags;
 };
 
+int av_optimize_mov_file(AVIOContext *pb);
+
 PHP_MINIT_FUNCTION(av);
 PHP_MSHUTDOWN_FUNCTION(av);
 PHP_RINIT_FUNCTION(av);
@@ -116,6 +118,7 @@ PHP_FUNCTION(av_file_close);
 PHP_FUNCTION(av_file_seek);
 PHP_FUNCTION(av_file_eof);
 PHP_FUNCTION(av_file_stat);
+PHP_FUNCTION(av_file_optimize);
 
 PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
@@ -126,8 +129,12 @@ PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_get_duration);
 
 ZEND_BEGIN_MODULE_GLOBALS(av)
+#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
 	uint8_t *video_buffer;
 	uint32_t video_buffer_size;
+#endif
+
+	zend_bool optimize_output;
 ZEND_END_MODULE_GLOBALS(av)
 
 #ifdef ZTS
