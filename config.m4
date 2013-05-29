@@ -59,6 +59,14 @@ if test "$PHP_AV" != "no"; then
   ],[
     -L$AV_DIR/lib -lm
   ]) 
+
+  PHP_CHECK_LIBRARY(avcodec,avcodec_default_get_buffer2,
+  [
+    AC_DEFINE(HAVE_AVCODEC_DEFAULT_GET_BUFFER2,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
   
   PHP_CHECK_LIBRARY(avformat,avio_open,
   [
@@ -95,7 +103,6 @@ if test "$PHP_AV" != "no"; then
     PHP_ADD_LIBRARY_WITH_PATH(swresample, $AV_DIR/lib, AV_SHARED_LIBADD)
     AC_DEFINE(HAVE_SWSRESAMPLE,1,[ ])
   ],[
-    AC_MSG_ERROR([wrong libswresample lib version or lib not found])
   ],[
     -L$AV_DIR/lib -lm
   ]) 

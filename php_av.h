@@ -36,6 +36,8 @@ extern zend_module_entry av_module_entry;
 #include "TSRM.h"
 #endif
 
+#undef HAVE_SWSRESAMPLE
+
 #include <avcodec.h>
 #include <avformat.h>
 #include <swscale.h>
@@ -60,7 +62,11 @@ struct av_stream {
 	float *samples;						// PCM data after resampling
 	uint32_t sample_count;				// the number of samples currently buffered
 	uint32_t sample_buffer_size;		// the number of samples in an audio frame
-	SwrContext *resampler_cxt;
+#ifdef HAVE_SWSRESAMPLE
+	SwrContext *resampler_cxt;			// resampler context
+#else
+	ReSampleContext *resampler_cxt;		// resampler context
+#endif
 
 	AVPacket *packet;					// the current packet
 	AVPacket **packet_queue;			// packets for this stream waiting to be decoded or written to disk
