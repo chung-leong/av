@@ -232,6 +232,7 @@ static void av_free_file(av_file *file) {
 			efree(file->streams);
 		}
 		if(file->flags & AV_FILE_WRITE) {
+			TSRMLS_FETCH();
 			if(AV_G(optimize_output)) {
 				if(av_is_qt_format(file->format_cxt->oformat)) {
 					avio_flush(file->format_cxt->pb);
@@ -636,8 +637,8 @@ static int av_seek_file(av_file *file, double time) {
 
 	// not setting a minimum--decode to the correct position if we have to
 	// never seek beyond the time given
-	min_time_stamp = -1 / time_unit;
-	time_stamp = time / time_unit;
+	min_time_stamp = (int64_t) (-1 / time_unit);
+	time_stamp = (int64_t) (time / time_unit);
 	max_time_stamp = time_stamp;
 
 	if(avformat_seek_file(file->format_cxt, stream_index, min_time_stamp, time_stamp, max_time_stamp, 0) < 0) {
@@ -1115,7 +1116,7 @@ static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
 		packet->dts = av_rescale_q(packet->dts, strm->codec_cxt->time_base, strm->stream->time_base);
 	}
 	if(packet->duration != AV_NOPTS_VALUE) {
-		packet->duration = av_rescale_q(packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
+		packet->duration = (int) av_rescale_q(packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
 	}
 	if(strm->codec_cxt->coded_frame && strm->codec_cxt->coded_frame->key_frame) {
 		packet->flags |= AV_PKT_FLAG_KEY;
@@ -1455,7 +1456,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 				next_frame = current_frame_temp;
 			} else {
 				// decode the current frame
-				if(!av_decode_frame_at_cursor(strm, current_frame, &current_frame_time TSRMLS_DC)) {
+				if(!av_decode_frame_at_cursor(strm, current_frame, &current_frame_time TSRMLS_CC)) {
 					return FALSE;
 				}
 				if(current_frame_time == strm->time_sought) {
@@ -1466,7 +1467,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 			}
 			// read the next frame so we can check if the current frame is the closest
 			// to the time sought without going over
-			if(av_decode_frame_at_cursor(strm, next_frame, &next_frame_time TSRMLS_DC) < 0) {
+			if(av_decode_frame_at_cursor(strm, next_frame, &next_frame_time TSRMLS_CC) < 0) {
 			    avcodec_free_frame(&next_frame);
 			    next_frame = NULL;
 				break;
@@ -1487,7 +1488,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 		    strm->next_frame = NULL;
 		    strm->next_frame_time = 0;
 		} else {
-			return av_decode_frame_at_cursor(strm, strm->frame, p_time TSRMLS_DC);
+			return av_decode_frame_at_cursor(strm, strm->frame, p_time TSRMLS_CC);
 		}
 	}
 	return TRUE;

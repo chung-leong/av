@@ -66,7 +66,7 @@ int av_shift_file(URLContext *file, int64_t start_offset, int64_t end_offset, in
     offset = end_offset;
     do {
     	if(bytes_to_move < buffer_size) {
-    	    bytes_to_copy = bytes_to_move;
+    	    bytes_to_copy = (int) bytes_to_move;
     		offset = start_offset;
     	} else {
     		offset -= buffer_size;
@@ -135,12 +135,12 @@ int av_optimize_mov_file(AVIOContext *pb) {
             if(ftyp_atom) {
             	efree(ftyp_atom);
             }
-            ftyp_atom = emalloc(ftyp_atom_size);
+            ftyp_atom = emalloc((size_t) ftyp_atom_size);
             start_offset = ffurl_seek(file, -ATOM_PREAMBLE_SIZE, SEEK_CUR);
             if (start_offset < 0) {
                 goto error_out;
             }
-        	if (ffurl_read_complete(file, ftyp_atom, atom_size) != atom_size) {
+        	if (ffurl_read_complete(file, ftyp_atom, (size_t) atom_size) != atom_size) {
                 goto error_out;
             }
         } else {
@@ -186,13 +186,13 @@ int av_optimize_mov_file(AVIOContext *pb) {
 
     /* moov atom was, in fact, the last atom in the chunk; load the whole
      * moov atom */
-    if (ffurl_seek(file, -atom_size, SEEK_END) < 0) {
+    if (ffurl_seek(file, - ((int64_t) atom_size), SEEK_END) < 0) {
         goto error_out;
     }
     last_offset    = ffurl_seek(file, 0, SEEK_CUR);
     moov_atom_size = atom_size;
-    moov_atom      = emalloc(moov_atom_size);
-    if (ffurl_read_complete(file, moov_atom, atom_size) != atom_size) {
+    moov_atom      = emalloc((size_t) moov_atom_size);
+    if (ffurl_read_complete(file, moov_atom, (int) moov_atom_size) != moov_atom_size) {
         goto error_out;
     }
 
@@ -254,7 +254,7 @@ int av_optimize_mov_file(AVIOContext *pb) {
 
     // write the updated moov atom
     ffurl_seek(file, start_offset + ftyp_atom_size, SEEK_SET);
-    ffurl_write(file, moov_atom, moov_atom_size);
+    ffurl_write(file, moov_atom, (int) moov_atom_size);
 
     result = TRUE;
 
