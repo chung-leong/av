@@ -1463,7 +1463,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 					// we have an exact match--no need to do more
 					break;
 				}
-				next_frame = av_frame_alloc();
+				next_frame = avcodec_alloc_frame();
 			}
 			// read the next frame so we can check if the current frame is the closest
 			// to the time sought without going over

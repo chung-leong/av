@@ -17,6 +17,7 @@ if test "$PHP_AV" != "no"; then
       if test -r $i/$SEARCH_FOR; then
         AV_DIR=$i
         AC_MSG_RESULT(found in $i)
+        break
       fi
     done
   fi
