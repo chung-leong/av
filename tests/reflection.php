@@ -62,7 +62,7 @@ av_file_close($file_in);
 $end = microtime(true);
 $duration = $end - $start;
 
-echo "$duration seconds";
+echo "$duration seconds\n";
 
 class ReflectionFilter {
 

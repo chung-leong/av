@@ -55,6 +55,6 @@ av_stream_close($v_strm_in);
 $end = microtime(true);
 $duration = $end - $start;
 
-echo "$duration seconds";
+echo "$duration seconds\n";
 
 ?>

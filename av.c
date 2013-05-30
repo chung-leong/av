@@ -1912,6 +1912,7 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 		Z_STRVAL_P(buffer)[data_len] = '\0';
 		return TRUE;
 	} else {
+		zval_dtor(buffer);
 		Z_TYPE_P(buffer) = IS_NULL;
 		return FALSE;
 	}
