@@ -994,6 +994,7 @@ PHP_FUNCTION(av_stream_open)
 	av_stream *strm;
 	int32_t stream_index;
 	double frame_duration = 0;
+	int thread_count = 0;
 	enum AVMediaType media_type;
 
 	if(zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rz|a", &z_strm, &z_id, &z_options) == FAILURE) {
@@ -1055,6 +1056,26 @@ PHP_FUNCTION(av_stream_open)
 		stream_index = file->stream_count;
 	}
 
+	if(AV_G(max_threads_per_stream) != 0) {
+		switch(media_type) {
+			case AVMEDIA_TYPE_VIDEO:
+				thread_count = av_get_option_long(z_options, "threads", AV_G(threads_per_video_stream));
+				break;
+			case AVMEDIA_TYPE_AUDIO:
+				thread_count = av_get_option_long(z_options, "threads", AV_G(threads_per_audio_stream));
+				break;
+			case AVMEDIA_TYPE_SUBTITLE:
+				break;
+			default:
+				break;
+		}
+		if(thread_count > 0) {
+			if(thread_count > AV_G(max_threads_per_stream)) {
+				thread_count = AV_G(max_threads_per_stream);
+			}
+		}
+	}
+
 	if(file->flags & AV_FILE_READ) {
 		if(Z_TYPE_P(z_id) == IS_STRING) {
 			int32_t type = av_get_stream_type(Z_STRVAL_P(z_id) TSRMLS_CC);
@@ -1079,6 +1100,7 @@ PHP_FUNCTION(av_stream_open)
 
 		stream = file->format_cxt->streams[stream_index];
 		codec_cxt = stream->codec;
+		codec_cxt->thread_count = thread_count;
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open codec '%s'", codec_cxt->codec->name);
 			return;
@@ -1118,7 +1140,7 @@ PHP_FUNCTION(av_stream_open)
 		codec = avcodec_find_encoder(codec_id);
 		if(!codec) {
 			if(codec_name) {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec '%'", codec_name);
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec '%s'", codec_name);
 			} else {
 				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec");
 			}
@@ -1137,6 +1159,7 @@ PHP_FUNCTION(av_stream_open)
 		if(codec->capabilities & CODEC_CAP_EXPERIMENTAL) {
 			codec_cxt->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 		}
+		codec_cxt->thread_count = thread_count;
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
 				frame_rate = av_get_option_double(z_options, "frame_rate", 24.0);
@@ -1185,21 +1208,6 @@ PHP_FUNCTION(av_stream_open)
 
 		frame = avcodec_alloc_frame();
 		frame->pts = 0;
-	}
-
-	if(AV_G(max_threads_per_stream) != 0) {
-		int thread_count = 1;
-		switch(media_type) {
-			case AVMEDIA_TYPE_VIDEO:
-				thread_count = av_get_option_long(z_options, "threads", AV_G(threads_per_video_stream));
-				break;
-			case AVMEDIA_TYPE_AUDIO:
-				thread_count = av_get_option_long(z_options, "threads", AV_G(threads_per_audio_stream));
-				break;
-			case AVMEDIA_TYPE_SUBTITLE:
-				break;
-		}
-		codec_cxt->thread_count = max(1, min(thread_count, AV_G(max_threads_per_stream)));
 	}
 
 	strm = emalloc(sizeof(av_stream));
@@ -1692,7 +1700,7 @@ int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 
 static int av_encode_next_frame(av_stream *strm, double time) {
 	av_file *file = strm->file;
-	int packet_finished;
+	int packet_finished = FALSE;
 	int result;
 	AVPacket *packet;
 
@@ -1721,16 +1729,13 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 			break;
 	}
 
-	if(result < 0) {
-		return FALSE;
-	}
 	if(packet_finished) {
 		av_write_next_packet(strm, packet);
 	} else {
 		av_free_packet(packet);
 		efree(packet);
 	}
-	return TRUE;
+	return !(result < 0);
 }
 
 static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, double *p_time TSRMLS_DC) {
@@ -1833,10 +1838,12 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 	return TRUE;
 }
 
-#if _MSC_VER < 1700
-int isnan(double x) { 
-	return x != x; 
-}
+#ifdef _MSC_VER
+	#if _MSC_VER < 1700
+	int isnan(double x) {
+		return x != x;
+	}
+	#endif
 #endif
 
 static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double time TSRMLS_DC) {
