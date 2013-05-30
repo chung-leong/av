@@ -36,8 +36,6 @@ extern zend_module_entry av_module_entry;
 #include "TSRM.h"
 #endif
 
-#undef HAVE_SWSRESAMPLE
-
 #include <avcodec.h>
 #include <avformat.h>
 #include <swscale.h>
@@ -65,6 +63,7 @@ struct av_stream {
 #ifdef HAVE_SWSRESAMPLE
 	SwrContext *resampler_cxt;			// resampler context
 #else
+	short *deplanarized_samples;		// buffer for planar to interleave conversion
 	ReSampleContext *resampler_cxt;		// resampler context
 #endif
 
