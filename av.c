@@ -482,8 +482,7 @@ PHP_MINFO_FUNCTION(av)
 {
     AVOutputFormat *ofmt = NULL;
     AVInputFormat *ifmt = NULL;
-    AVCodec *codec = NULL;
-	char name_buffer[1024], ext_buffer[1024];
+ 	char name_buffer[1024], ext_buffer[1024];
 
 	php_info_print_table_start();
 	php_info_print_table_header(2, "av support", "enabled");
@@ -505,14 +504,6 @@ PHP_MINFO_FUNCTION(av)
 	php_info_print_table_header(3, "Name", "Short name", "Extensions");
     while((ifmt = av_iformat_next(ifmt))) {
     	php_info_print_table_row(3, ifmt->long_name, av_insert_spaces(ifmt->name, name_buffer, sizeof(name_buffer)), av_insert_spaces(ifmt->extensions, ext_buffer, sizeof(ext_buffer)));
-    }
-	php_info_print_table_end();
-
-	php_info_print_table_start();
-	php_info_print_table_colspan_header(2, "Codecs");
-	php_info_print_table_header(2, "Name", "Short name");
-    while((codec = av_codec_next(codec))) {
-    	php_info_print_table_row(2, codec->long_name, av_insert_spaces(codec->name, name_buffer, sizeof(name_buffer)));
     }
 	php_info_print_table_end();
 }
@@ -981,6 +972,40 @@ static int av_stream_get_buffer(AVCodecContext *c, AVFrame *pic) {
 }
 #endif
 
+int av_strcasecmp(const char *a, const char *b);
+
+static int av_find_codec(const char *short_name, AVCodec **p_enc, AVCodec **p_dec)
+{
+	AVCodec *codec = NULL;
+	if(p_enc) {
+		*p_enc = NULL;
+	}
+	if(p_dec) {
+		*p_dec = NULL;
+	}
+    while ((codec = av_codec_next(codec))) {
+        if (av_strcasecmp(short_name, codec->name) == 0) {
+        	enum AVCodecID id = codec->id;
+        	do {
+        		if(av_codec_is_encoder(codec)) {
+        			if(p_enc) {
+        				*p_enc = codec;
+        			}
+        		} else if(av_codec_is_decoder(codec)) {
+        			if(p_dec) {
+        				*p_dec = codec;
+        			}
+        		}
+        		codec = av_codec_next(codec);
+        	} while(codec && codec->id == id);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+enum AVPixelFormat av_get_pix_fmt(const char *name);
+
 /* {{{ proto string av_stream_open(resource file, mixed id, [, array options])
    Create an encoder */
 PHP_FUNCTION(av_stream_open)
@@ -1014,13 +1039,13 @@ PHP_FUNCTION(av_stream_open)
 			}
 			stream_index = av_find_best_stream(file->format_cxt, media_type, -1, -1, &codec, 0);
 			if(stream_index < 0) {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Cannot find a stream of type '%s'", Z_STRVAL_P(z_id));
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "cannot find a stream of type '%s'", Z_STRVAL_P(z_id));
 				return;
 			}
 		} else if(Z_TYPE_P(z_id) == IS_LONG || Z_TYPE_P(z_id) == IS_DOUBLE) {
 			stream_index = (Z_TYPE_P(z_id) == IS_DOUBLE) ? (long) Z_DVAL_P(z_id) : Z_LVAL_P(z_id);
 			if(!(stream_index >= 0 && (uint32_t) stream_index < file->stream_count)) {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Stream index must be between 0 and %d", file->stream_count);
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "stream index must be between 0 and %d", file->stream_count);
 				return;
 			}
 		} else {
@@ -1056,6 +1081,7 @@ PHP_FUNCTION(av_stream_open)
 		stream_index = file->stream_count;
 	}
 
+	// set the thread count
 	if(AV_G(max_threads_per_stream) != 0) {
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
@@ -1084,13 +1110,13 @@ PHP_FUNCTION(av_stream_open)
 			}
 			stream_index = av_find_best_stream(file->format_cxt, type, -1, -1, &codec, 0);
 			if(stream_index < 0) {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Cannot find a stream of type '%s'", Z_STRVAL_P(z_id));
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "cannot find a stream of type '%s'", Z_STRVAL_P(z_id));
 				return;
 			}
 		} else if(Z_TYPE_P(z_id) == IS_LONG || Z_TYPE_P(z_id) == IS_DOUBLE) {
 			stream_index = (Z_TYPE_P(z_id) == IS_DOUBLE) ? (long) Z_DVAL_P(z_id) : Z_LVAL_P(z_id);
 			if(!(stream_index >= 0 && (uint32_t) stream_index < file->stream_count)) {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Stream index must be between 0 and %d", file->stream_count);
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "stream index must be between 0 and %d", file->stream_count);
 				return;
 			}
 		} else {
@@ -1117,38 +1143,31 @@ PHP_FUNCTION(av_stream_open)
 	} else if(file->flags & AV_FILE_WRITE) {
 		double frame_rate;
 		uint32_t sample_rate, bit_rate, width, height, gop_size;
-		enum AVCodecID codec_id;
+		enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
 		const char *codec_name = av_get_option_string(z_options, "codec", NULL);
+		const char *pixel_format_name;
 
 		if(codec_name) {
-			codec_id = av_guess_codec((AVOutputFormat *) file->output_format, codec_name, NULL, NULL, media_type);
+			if(!av_find_codec(codec_name, &codec, NULL)) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "unable to find codec '%s'", codec_name);
+				return;
+			} else if(!codec) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "no encoding capability for codec '%s'", codec_name);
+				return;
+			}
 		} else {
-			switch(media_type) {
-				case AVMEDIA_TYPE_VIDEO:
-					codec_id = file->output_format->video_codec;
-					break;
-				case AVMEDIA_TYPE_AUDIO:
-					codec_id = file->output_format->audio_codec;
-					break;
-				case AVMEDIA_TYPE_SUBTITLE:
-					codec_id = file->output_format->subtitle_codec;
-					break;
-				default:
-					break;
+			enum AVCodecID codec_id = av_guess_codec((AVOutputFormat *) file->output_format, NULL, NULL, NULL, media_type);
+			codec = avcodec_find_encoder(codec_id);
+			if(!codec) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "unable to find codec");
+				return;
 			}
 		}
-		codec = avcodec_find_encoder(codec_id);
-		if(!codec) {
-			if(codec_name) {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec '%s'", codec_name);
-			} else {
-				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec");
-			}
-			return;
-		}
+
+		// add the stream
 		stream = avformat_new_stream(file->format_cxt, codec);
 		if(!stream) {
-			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open stream");
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "unable to open stream");
 			return;
 		}
 
@@ -1160,6 +1179,7 @@ PHP_FUNCTION(av_stream_open)
 			codec_cxt->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 		}
 		codec_cxt->thread_count = thread_count;
+
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
 				frame_rate = av_get_option_double(z_options, "frame_rate", 24.0);
@@ -1168,12 +1188,22 @@ PHP_FUNCTION(av_stream_open)
 				width = av_get_option_long(z_options, "width", 320);
 				height = av_get_option_long(z_options, "height", 240);
 				gop_size = av_get_option_long(z_options, "gop", 600);
+				pixel_format_name = av_get_option_string(z_options, "pix_fmt", NULL);
+				if(pixel_format_name) {
+					pix_fmt = av_get_pix_fmt(pixel_format_name);
+					if(pix_fmt == AV_PIX_FMT_NONE) {
+						php_error_docref(NULL TSRMLS_CC, E_ERROR, "invalid pixel format '%s'", pixel_format_name);
+						return;
+					}
+				} else {
+					pix_fmt = codec->pix_fmts[0];
+				}
 
 				file->format_cxt->video_codec_id = codec->id;
 				codec_cxt->width = width;
 				codec_cxt->height = height;
 				codec_cxt->time_base = av_d2q(frame_duration, 1024);
-				codec_cxt->pix_fmt = codec->pix_fmts[0];
+				codec_cxt->pix_fmt = pix_fmt;
 				codec_cxt->gop_size = gop_size;
 				codec_cxt->bit_rate = bit_rate;
 				break;
