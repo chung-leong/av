@@ -1096,27 +1096,39 @@ PHP_FUNCTION(av_stream_open)
 		double frame_rate;
 		uint32_t sample_rate, bit_rate, width, height, gop_size;
 		enum AVCodecID codec_id;
+		const char *codec_name = av_get_option_string(z_options, "codec", NULL);
 
-		switch(media_type) {
-			case AVMEDIA_TYPE_VIDEO:
-				codec_id = file->output_format->video_codec;
-				break;
-			case AVMEDIA_TYPE_AUDIO:
-				codec_id = file->output_format->audio_codec;
-				break;
-			case AVMEDIA_TYPE_SUBTITLE:
-				codec_id = file->output_format->subtitle_codec;
-				break;
-			default:
-				break;
+		if(codec_name) {
+			codec_id = av_guess_codec((AVOutputFormat *) file->output_format, codec_name, NULL, NULL, media_type);
+		} else {
+			switch(media_type) {
+				case AVMEDIA_TYPE_VIDEO:
+					codec_id = file->output_format->video_codec;
+					break;
+				case AVMEDIA_TYPE_AUDIO:
+					codec_id = file->output_format->audio_codec;
+					break;
+				case AVMEDIA_TYPE_SUBTITLE:
+					codec_id = file->output_format->subtitle_codec;
+					break;
+				default:
+					break;
+			}
 		}
 		codec = avcodec_find_encoder(codec_id);
 		if(!codec) {
-			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec");
+			if(codec_name) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec '%'", codec_name);
+			} else {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to find codec");
+			}
 			return;
 		}
-
 		stream = avformat_new_stream(file->format_cxt, codec);
+		if(!stream) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open stream");
+			return;
+		}
 
 		codec_cxt = stream->codec;
 	    if(file->output_format->flags & AVFMT_GLOBALHEADER) {
