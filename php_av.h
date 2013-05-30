@@ -141,6 +141,9 @@ ZEND_BEGIN_MODULE_GLOBALS(av)
 	uint32_t video_buffer_size;
 #endif
 
+	long max_threads_per_stream;
+	long threads_per_video_stream;
+	long threads_per_audio_stream;
 	zend_bool optimize_output;
 	zend_bool verbose_reporting;
 ZEND_END_MODULE_GLOBALS(av)

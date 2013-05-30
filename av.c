@@ -149,6 +149,10 @@ ZEND_GET_MODULE(av)
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("av.optimize_output", "1", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
     STD_PHP_INI_ENTRY("av.verbose_reporting", "0", PHP_INI_ALL, OnUpdateBool, verbose_reporting, zend_av_globals, av_globals)
+
+	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "0", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "0", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "0", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -158,6 +162,9 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 {
 	av_globals->optimize_output = TRUE;
 	av_globals->verbose_reporting = FALSE;
+	av_globals->max_threads_per_stream = 1;
+	av_globals->threads_per_video_stream = 1;
+	av_globals->threads_per_audio_stream = 1;
 }
 /* }}} */
 
@@ -459,17 +466,22 @@ PHP_MINFO_FUNCTION(av)
     while((ofmt = av_oformat_next(ofmt))) {
     	php_info_print_table_row(4, ofmt->long_name, ofmt->name, ofmt->mime_type, ofmt->extensions);
     }
+	php_info_print_table_end();
+
+	php_info_print_table_start();
 	php_info_print_table_colspan_header(3, "Input formats");
 	php_info_print_table_header(3, "Name", "Short name", "Extensions");
     while((ifmt = av_iformat_next(ifmt))) {
     	php_info_print_table_row(3, ifmt->long_name, ifmt->name, ifmt->extensions);
     }
+	php_info_print_table_end();
+
+	php_info_print_table_start();
 	php_info_print_table_colspan_header(2, "Codecs");
 	php_info_print_table_header(2, "Name", "Short name");
     while((codec = av_codec_next(codec))) {
     	php_info_print_table_row(2, codec->long_name, codec->name);
     }
-
 	php_info_print_table_end();
 
 	DISPLAY_INI_ENTRIES();
@@ -1037,7 +1049,6 @@ PHP_FUNCTION(av_stream_open)
 
 		stream = file->format_cxt->streams[stream_index];
 		codec_cxt = stream->codec;
-		codec_cxt->thread_count = 1;
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open codec '%s'", codec_cxt->codec->name);
 			return;
@@ -1084,7 +1095,6 @@ PHP_FUNCTION(av_stream_open)
 		if(codec->capabilities & CODEC_CAP_EXPERIMENTAL) {
 			codec_cxt->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 		}
-		codec_cxt->thread_count = 1;
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
 				frame_rate = av_get_option_double(z_options, "frame_rate", 24.0);
@@ -1133,6 +1143,21 @@ PHP_FUNCTION(av_stream_open)
 
 		frame = avcodec_alloc_frame();
 		frame->pts = 0;
+	}
+
+	if(AV_G(max_threads_per_stream) != 0) {
+		int thread_count = 1;
+		switch(media_type) {
+			case AVMEDIA_TYPE_VIDEO:
+				thread_count = av_get_option_long(z_options, "threads", AV_G(threads_per_video_stream));
+				break;
+			case AVMEDIA_TYPE_AUDIO:
+				thread_count = av_get_option_long(z_options, "threads", AV_G(threads_per_audio_stream));
+				break;
+			case AVMEDIA_TYPE_SUBTITLE:
+				break;
+		}
+		codec_cxt->thread_count = max(1, min(thread_count, AV_G(max_threads_per_stream)));
 	}
 
 	strm = emalloc(sizeof(av_stream));

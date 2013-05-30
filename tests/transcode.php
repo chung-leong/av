@@ -1,5 +1,6 @@
 <?php
 
+$start = microtime(true);
 $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
 $file_in = av_file_open("$folder/source-code.mov", "rb");
@@ -50,5 +51,10 @@ av_stream_close($v_strm_out2);
 av_file_close($file_in);
 av_stream_close($a_strm_in);
 av_stream_close($v_strm_in);
+
+$end = microtime(true);
+$duration = $end - $start;
+
+echo "$duration seconds";
 
 ?>
