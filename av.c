@@ -134,7 +134,7 @@ zend_module_entry av_module_entry = {
 	PHP_RSHUTDOWN(av),	/* Replace with NULL if there's nothing to do at request end */
 	PHP_MINFO(av),
 #if ZEND_MODULE_API_NO >= 20010901
-	"0.1", /* Replace with version number for your extension */
+	STRING(AV_MAJOR_VERSION) "." STRING(AV_MINOR_VERSION), /* Replace with version number for your extension */
 #endif
 	STANDARD_MODULE_PROPERTIES
 };
@@ -150,9 +150,9 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("av.optimize_output", "1", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
     STD_PHP_INI_ENTRY("av.verbose_reporting", "0", PHP_INI_ALL, OnUpdateBool, verbose_reporting, zend_av_globals, av_globals)
 
-	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "0", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "0", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "0", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
+	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "2", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -162,7 +162,7 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 {
 	av_globals->optimize_output = TRUE;
 	av_globals->verbose_reporting = FALSE;
-	av_globals->max_threads_per_stream = 1;
+	av_globals->max_threads_per_stream = 2;
 	av_globals->threads_per_video_stream = 1;
 	av_globals->threads_per_audio_stream = 1;
 }
@@ -376,6 +376,8 @@ PHP_MINIT_FUNCTION(av)
 {
 	ZEND_INIT_MODULE_GLOBALS(av, php_av_init_globals, NULL);
 
+	REGISTER_INI_ENTRIES();
+
 	av_set_log_level(TSRMLS_C);
 	av_register_all();
 	avcodec_register_all();
@@ -448,6 +450,32 @@ PHP_RSHUTDOWN_FUNCTION(av)
 }
 /* }}} */
 
+static char *av_insert_spaces(const char *list, char *buffer, size_t buffer_size) {
+	if(list && list[0]) {
+		// add space after comma so the list doesn't blow out the table
+		uint32_t i, j;
+		for(i = 0, j = 0; list[i] != '\0'; i++) {
+			if(list[i] == ',') {
+				if(list[i + 1] != ' ' && list[i + 1] != '\0') {
+					buffer[j++] = ',';
+					buffer[j++] = ' ';
+				} else {
+					buffer[j++] = ',';
+				}
+			} else {
+				buffer[j++] = list[i];
+			}
+			if(j + 2 > buffer_size) {
+				break;
+			}
+		}
+		buffer[j] = '\0';
+		return buffer;
+	} else {
+		return NULL;
+	}
+}
+
 /* {{{ PHP_MINFO_FUNCTION
  */
 PHP_MINFO_FUNCTION(av)
@@ -455,16 +483,20 @@ PHP_MINFO_FUNCTION(av)
     AVOutputFormat *ofmt = NULL;
     AVInputFormat *ifmt = NULL;
     AVCodec *codec = NULL;
+	char name_buffer[1024], ext_buffer[1024];
 
 	php_info_print_table_start();
 	php_info_print_table_header(2, "av support", "enabled");
+	php_info_print_table_row(2, "Version", STRING(AV_MAJOR_VERSION) "." STRING(AV_MINOR_VERSION));
 	php_info_print_table_end();
+
+	DISPLAY_INI_ENTRIES();
 
 	php_info_print_table_start();
 	php_info_print_table_colspan_header(4, "Output formats");
 	php_info_print_table_header(4, "Name", "Short name", "MIME type", "Extensions");
     while((ofmt = av_oformat_next(ofmt))) {
-    	php_info_print_table_row(4, ofmt->long_name, ofmt->name, ofmt->mime_type, ofmt->extensions);
+    	php_info_print_table_row(4, ofmt->long_name, av_insert_spaces(ofmt->name, name_buffer, sizeof(name_buffer)), ofmt->mime_type, av_insert_spaces(ofmt->extensions, ext_buffer, sizeof(ext_buffer)));
     }
 	php_info_print_table_end();
 
@@ -472,7 +504,7 @@ PHP_MINFO_FUNCTION(av)
 	php_info_print_table_colspan_header(3, "Input formats");
 	php_info_print_table_header(3, "Name", "Short name", "Extensions");
     while((ifmt = av_iformat_next(ifmt))) {
-    	php_info_print_table_row(3, ifmt->long_name, ifmt->name, ifmt->extensions);
+    	php_info_print_table_row(3, ifmt->long_name, av_insert_spaces(ifmt->name, name_buffer, sizeof(name_buffer)), av_insert_spaces(ifmt->extensions, ext_buffer, sizeof(ext_buffer)));
     }
 	php_info_print_table_end();
 
@@ -480,11 +512,9 @@ PHP_MINFO_FUNCTION(av)
 	php_info_print_table_colspan_header(2, "Codecs");
 	php_info_print_table_header(2, "Name", "Short name");
     while((codec = av_codec_next(codec))) {
-    	php_info_print_table_row(2, codec->long_name, codec->name);
+    	php_info_print_table_row(2, codec->long_name, av_insert_spaces(codec->name, name_buffer, sizeof(name_buffer)));
     }
 	php_info_print_table_end();
-
-	DISPLAY_INI_ENTRIES();
 }
 /* }}} */
 
