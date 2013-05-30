@@ -157,6 +157,7 @@ PHP_INI_END()
 static void php_av_init_globals(zend_av_globals *av_globals)
 {
 	av_globals->optimize_output = TRUE;
+	av_globals->verbose_reporting = FALSE;
 }
 /* }}} */
 
@@ -354,12 +355,21 @@ static int av_shift_packet(av_stream *strm) {
 	}
 }
 
+static void av_set_log_level(TSRMLS_D) {
+	if(AV_G(verbose_reporting)) {
+		av_log_set_level(AV_LOG_VERBOSE);
+	} else {
+		av_log_set_level(AV_LOG_FATAL);
+	}
+}
+
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(av)
 {
 	ZEND_INIT_MODULE_GLOBALS(av, php_av_init_globals, NULL);
 
+	av_set_log_level(TSRMLS_C);
 	av_register_all();
 	avcodec_register_all();
 	le_av_file = zend_register_list_destructors_ex(php_free_av_file, NULL, "av file", module_number);
@@ -494,14 +504,6 @@ int av_copy_metadata(AVDictionary **dict, zval *options TSRMLS_DC) {
 	return TRUE;
 }
 
-static void av_set_log_level(TSRMLS_D) {
-	if(AV_G(verbose_reporting)) {
-		av_log_set_level(AV_LOG_VERBOSE);
-	} else {
-		av_log_set_level(AV_LOG_FATAL);
-	}
-}
-
 /* Every user-visible function in PHP should document itself in the source */
 /* {{{ proto string av_file_open(string arg, string mode [, array options])
    Create an encoder */
@@ -583,7 +585,7 @@ PHP_FUNCTION(av_file_open)
 		format_cxt->oformat = output_format;
 
 		// copy metadata
-		av_copy_metadata(&format_cxt->metadata, z_options);
+		av_copy_metadata(&format_cxt->metadata, z_options TSRMLS_CC);
 	}
 
 	file = emalloc(sizeof(av_file));
@@ -949,7 +951,7 @@ PHP_FUNCTION(av_stream_open)
 	av_file *file;
 	av_stream *strm;
 	int32_t stream_index;
-	double frame_duration;
+	double frame_duration = 0;
 	enum AVMediaType media_type;
 
 	if(zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rz|a", &z_strm, &z_id, &z_options) == FAILURE) {
@@ -982,7 +984,7 @@ PHP_FUNCTION(av_stream_open)
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "parameter 2 should be \"video\", \"audio\", \"subtitle\", or an stream index");
 			return;
 		}
-		if(stream_index < file->stream_count) {
+		if(stream_index < (int32_t) file->stream_count) {
 			strm = file->streams[stream_index];
 			if(strm) {
 				if(strm->flags & AV_STREAM_FREED) {
@@ -1127,7 +1129,7 @@ PHP_FUNCTION(av_stream_open)
 		}
 
 		// copy metadata
-		av_copy_metadata(&stream->metadata, z_options);
+		av_copy_metadata(&stream->metadata, z_options TSRMLS_CC);
 
 		frame = avcodec_alloc_frame();
 		frame->pts = 0;
@@ -1764,6 +1766,12 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 	return TRUE;
 }
 
+#if _MSC_VER < 1700
+int isnan(double x) { 
+	return x != x; 
+}
+#endif
+
 static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double time TSRMLS_DC) {
 	av_create_picture_and_scaler(strm, image->sx, image->sy, FOR_ENCODING);
 	av_copy_image_from_gd(strm->picture, image);
@@ -1806,7 +1814,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 		double start_time = time - buffered_duration;
 		double error = strm->sample_start_time - start_time;
 
-		if(abs(error) < 0.001) {
+		if(fabs(error) < 0.001) {
 			// the error is small--ignore it
 			strm->sample_start_time = start_time;
 		} else {
@@ -1831,10 +1839,10 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 		// make sure samples are between (-1.0, 1.0)
 		for(i = 0; i < samples_to_copy * 2; i++) {
 			float sample = src_samples[i];
-			if(EXPECTED(-1.0 <= sample && sample <= 1.0)) {
+			if(EXPECTED(-1.0f <= sample && sample <= 1.0f)) {
 				dst_samples[i] = sample;
 			} else {
-				dst_samples[i] = (sample < -1) ? -1.0 : 1.0;
+				dst_samples[i] = (sample < -1) ? -1.0f : 1.0f;
 			}
 		}
 		src_samples_remaining -= samples_to_copy;
