@@ -1179,16 +1179,25 @@ static void av_flush_remaining_frames(av_stream *strm) {
 	}
 }
 
+static void av_transfer_pcm_to_frame(av_stream *strm);
+static int av_encode_next_frame(av_stream *strm, double time);
+
 static int av_flush_pending_packets(av_file *file) {
 	av_stream *pending_stream;
 	file->flags |= AV_FILE_EOF_REACHED;
 
-	//
 	if(file->flags & AV_FILE_HEADER_WRITTEN) {
 		uint32_t i;
 		for(i = 0; i < file->stream_count; i++) {
 			av_stream *strm = file->streams[i];
 			if(strm) {
+				if(strm->codec->type == AVMEDIA_TYPE_AUDIO) {
+					if(strm->sample_count) {
+						av_transfer_pcm_to_frame(strm);
+						av_encode_next_frame(strm, strm->sample_start_time);
+						strm->sample_count = 0;
+					}
+				}
 				av_flush_remaining_frames(strm);
 			}
 		}
@@ -1673,12 +1682,42 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 	src_samples_remaining = Z_STRLEN_P(buffer) / (sizeof(float) * 2);
 	dst_samples = strm->samples + strm->sample_count * 2;
 
+	if(!isnan(time)) {
+		double buffered_duration = strm->sample_count * (1 / 44100.0);
+		double start_time = time - buffered_duration;
+		double error = strm->sample_start_time - start_time;
+
+		if(abs(error) < 0.001) {
+			// the error is small--ignore it
+			strm->sample_start_time = start_time;
+		} else {
+			if(strm->sample_count > 0) {
+				// start a new packet
+				av_transfer_pcm_to_frame(strm);
+				if(!av_encode_next_frame(strm, strm->sample_start_time)) {
+					return FALSE;
+				}
+				strm->sample_count = 0;
+			}
+			strm->sample_start_time = time;
+		}
+	}
+
 	// keep copying into audio frame until are samples are used up
 	while(src_samples_remaining) {
 		uint32_t samples_needed = strm->sample_buffer_size - strm->sample_count;
 		uint32_t samples_to_copy = (samples_needed < src_samples_remaining) ? samples_needed : src_samples_remaining;
+		uint32_t i;
 
-		memcpy(dst_samples, src_samples, (sizeof(float) * 2) * samples_to_copy);
+		// make sure samples are between (-1.0, 1.0)
+		for(i = 0; i < samples_to_copy * 2; i++) {
+			float sample = src_samples[i];
+			if(EXPECTED(-1.0 <= sample && sample <= 1.0)) {
+				dst_samples[i] = sample;
+			} else {
+				dst_samples[i] = (sample < -1) -1.0 : 1.0;
+			}
+		}
 		src_samples_remaining -= samples_to_copy;
 		strm->sample_count += samples_to_copy;
 		src_samples += samples_to_copy * 2;
@@ -1687,14 +1726,14 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 		if(strm->sample_count == strm->sample_buffer_size) {
 			// transfer the data to the frame then compress it
 			av_transfer_pcm_to_frame(strm);
-			if(!av_encode_next_frame(strm, time)) {
+			if(!av_encode_next_frame(strm, strm->sample_start_time)) {
 				return FALSE;
 			}
+			// adjust the time
+			strm->sample_start_time += strm->sample_count * (1 / 44100.0);
+
 			strm->sample_count = 0;
 			dst_samples = strm->samples;
-
-			// adjust the time
-			time += samples_to_copy * (1 / 44100.0 / 2);
 		}
 	}
 	return TRUE;

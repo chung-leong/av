@@ -60,6 +60,7 @@ struct av_stream {
 	float *samples;						// PCM data after resampling
 	uint32_t sample_count;				// the number of samples currently buffered
 	uint32_t sample_buffer_size;		// the number of samples in an audio frame
+	double sample_start_time;
 #ifdef HAVE_SWSRESAMPLE
 	SwrContext *resampler_cxt;			// resampler context
 #else
