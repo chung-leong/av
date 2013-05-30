@@ -3,19 +3,19 @@
 $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
 $file_in = av_file_open("$folder/source-code.mov", "rb");
-$file_out1 = av_file_open("$folder/source-code.mp4", "wb");
+$stat_in = av_file_stat($file_in);
+$file_out1 = av_file_open("$folder/source-code.mp4", "wb", array( "metadata" => $stat_in["metadata"] ));
 $file_out2 = av_file_open("$folder/source-code.webm", "wb");
 
-print_r(av_file_stat($file_in));
 
 $a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");
 
 $a_strm_out1 = av_stream_open($file_out1, "audio");
-$v_strm_out1 = av_stream_open($file_out1, "video", array( "width" => imagesx($image), "height" => imagesy($image)));
+$v_strm_out1 = av_stream_open($file_out1, "video", array( "width" => imagesx($image), "height" => imagesy($image) ));
 
 $a_strm_out2 = av_stream_open($file_out2, "audio");
-$v_strm_out2 = av_stream_open($file_out2, "video", array( "width" => imagesx($image), "height" => imagesy($image)));
+$v_strm_out2 = av_stream_open($file_out2, "video", array( "width" => imagesx($image), "height" => imagesy($image) ));
 
 $v_time = 0;
 $a_time = 0;

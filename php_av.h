@@ -56,7 +56,7 @@ struct av_stream {
 	double next_frame_time;
 
 	AVFrame *picture;					// RGBA picture
-	struct SwsContext *scalar_cxt;		// scalar context
+	struct SwsContext *scaler_cxt;		// scaler context
 
 	float *samples;						// PCM data after resampling
 	uint32_t sample_count;				// the number of samples currently buffered
@@ -142,6 +142,7 @@ ZEND_BEGIN_MODULE_GLOBALS(av)
 #endif
 
 	zend_bool optimize_output;
+	zend_bool verbose_reporting;
 ZEND_END_MODULE_GLOBALS(av)
 
 #ifdef ZTS

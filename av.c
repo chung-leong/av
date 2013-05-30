@@ -147,7 +147,8 @@ ZEND_GET_MODULE(av)
 /* {{{ PHP_INI
  */
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("av.optimize_output", "0", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.optimize_output", "1", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.verbose_reporting", "0", PHP_INI_ALL, OnUpdateBool, verbose_reporting, zend_av_globals, av_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -201,8 +202,8 @@ static void av_free_file(av_file *file) {
 					avpicture_free((AVPicture *) strm->picture);
 					avcodec_free_frame(&strm->picture);
 				}
-				if(strm->scalar_cxt) {
-					sws_freeContext(strm->scalar_cxt);
+				if(strm->scaler_cxt) {
+					sws_freeContext(strm->scaler_cxt);
 				}
 				if(strm->resampler_cxt) {
 #ifdef HAVE_SWSRESAMPLE
@@ -465,6 +466,42 @@ PHP_MINFO_FUNCTION(av)
 }
 /* }}} */
 
+int av_copy_metadata(AVDictionary **dict, zval *options TSRMLS_DC) {
+	if(options) {
+		zval **p_metadata;
+		if(zend_hash_find(Z_ARRVAL_P(options), "metadata", 9, (void **) &p_metadata) == SUCCESS) {
+			zval *metadata = *p_metadata;
+			if(Z_TYPE_P(metadata) == IS_ARRAY) {
+				Bucket *p;
+				HashTable *ht = Z_ARRVAL_P(metadata);
+				for(p = ht->pListHead; p; p = p->pListNext) {
+					if(p->nKeyLength > 0) {
+						zval **p_element = p->pData, *element = *p_element;
+						const char *key, *value;
+						convert_to_string(element);
+						key = p->arKey;
+						value = Z_STRVAL_P(element);
+						av_dict_set(dict, key, value, 0);
+					}
+				}
+			} else {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "metadata should be an array");
+				return FALSE;
+			}
+
+		}
+	}
+	return TRUE;
+}
+
+static void av_set_log_level(TSRMLS_D) {
+	if(AV_G(verbose_reporting)) {
+		av_log_set_level(AV_LOG_VERBOSE);
+	} else {
+		av_log_set_level(AV_LOG_FATAL);
+	}
+}
+
 /* Every user-visible function in PHP should document itself in the source */
 /* {{{ proto string av_file_open(string arg, string mode [, array options])
    Create an encoder */
@@ -484,17 +521,27 @@ PHP_FUNCTION(av_file_open)
 		return;
 	}
 
+	av_set_log_level(TSRMLS_C);
+
 	for(code = mode; *code; code++) {
 		if(*code == 'r') {
-			flags |= AV_FILE_READ;
+			flags = AV_FILE_READ;
 		} else if(*code == 'w') {
-			flags |= AV_FILE_WRITE;
-		} else if(*code == 'a') {
-			flags |= AV_FILE_READ | AV_FILE_WRITE | AV_FILE_APPEND;
+			flags = AV_FILE_WRITE;
 		}
 	}
 
-	if(!(flags & AV_FILE_READ) && (flags & AV_FILE_WRITE)) {
+	if(flags & AV_FILE_READ) {
+		if (avformat_open_input(&format_cxt, filename, NULL, NULL) < 0) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error opening file for reading: %s", filename);
+			return;
+		}
+		if (avformat_find_stream_info(format_cxt, NULL) < 0) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error finding stream info: %s", filename);
+			return;
+		}
+		input_format = format_cxt->iformat;
+	} else if(flags & AV_FILE_WRITE) {
 		AVIOContext *pb = NULL;
 		if(z_options) {
 			zval **p_value = NULL;
@@ -534,16 +581,9 @@ PHP_FUNCTION(av_file_open)
 		format_cxt = avformat_alloc_context();
 		format_cxt->pb = pb;
 		format_cxt->oformat = output_format;
-	} else {
-		if (avformat_open_input(&format_cxt, filename, NULL, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error opening file for reading: %s", filename);
-			return;
-		}
-		if (avformat_find_stream_info(format_cxt, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error finding stream info: %s", filename);
-			return;
-		}
-		input_format = format_cxt->iformat;
+
+		// copy metadata
+		av_copy_metadata(&format_cxt->metadata, z_options);
 	}
 
 	file = emalloc(sizeof(av_file));
@@ -573,8 +613,10 @@ PHP_FUNCTION(av_file_close)
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
 	}
-
 	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
+
+	av_set_log_level(TSRMLS_C);
+
 	if(file->open_stream_count == 0) {
 		RETVAL_TRUE;
 	} else {
@@ -584,7 +626,7 @@ PHP_FUNCTION(av_file_close)
 }
 /* }}} */
 
-static int av_seek_file(av_file *file, double time) {
+static int av_seek_file(av_file *file, double time, int precise) {
 	double time_unit;
 	int64_t min_time_stamp, time_stamp, max_time_stamp;
 	int32_t stream_index = -1;
@@ -652,8 +694,15 @@ static int av_seek_file(av_file *file, double time) {
 	for(i = 0; i < file->stream_count; i++) {
 		av_stream *strm = file->streams[i];
 		if(strm) {
-			strm->flags |= AV_STREAM_SOUGHT;
-			strm->time_sought = time;
+			if(precise) {
+				// note the time so we can decode to it
+				strm->flags |= AV_STREAM_SOUGHT;
+				strm->time_sought = time;
+			} else {
+				// just in case a seek had occurred before
+				strm->flags &= ~AV_STREAM_SOUGHT;
+				strm->time_sought = 0;
+			}
 		}
 	}
 
@@ -669,13 +718,16 @@ PHP_FUNCTION(av_file_seek)
 	zval *z_file;
 	av_file *file;
 	double time;
+	zend_bool precise = TRUE;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rd", &z_file, &time) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rd|b", &z_file, &time, &precise) == FAILURE) {
 		return;
 	}
-
 	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
-	if(av_seek_file(file, time)) {
+
+	av_set_log_level(TSRMLS_C);
+
+	if(av_seek_file(file, time, precise)) {
 		RETVAL_TRUE;
 	} else {
 		RETVAL_FALSE;
@@ -694,7 +746,6 @@ PHP_FUNCTION(av_file_eof)
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
 	}
-
 	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
 
 	if(file->flags & AV_FILE_EOF_REACHED) {
@@ -768,9 +819,10 @@ PHP_FUNCTION(av_file_stat)
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
 	}
-
 	ZEND_FETCH_RESOURCE(file, av_file *, &z_file, -1, "av file", le_av_file);
 	f = file->format_cxt;
+
+	av_set_log_level(TSRMLS_C);
 
 	array_init(return_value);
 
@@ -852,6 +904,8 @@ PHP_FUNCTION(av_file_optimize)
 		return;
 	}
 
+	av_set_log_level(TSRMLS_C);
+
 	av_dict_set(&options, "truncate", "0", 0);
 	if(avio_open2(&pb, filename, AVIO_FLAG_READ_WRITE, NULL, &options) < 0) {
 		php_error_docref(NULL TSRMLS_CC, E_ERROR, "Error opening file for writing: %s", filename);
@@ -896,12 +950,66 @@ PHP_FUNCTION(av_stream_open)
 	av_stream *strm;
 	int32_t stream_index;
 	double frame_duration;
+	enum AVMediaType media_type;
 
 	if(zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rz|a", &z_strm, &z_id, &z_options) == FAILURE) {
 		return;
 	}
-
 	ZEND_FETCH_RESOURCE(file, av_file *, &z_strm, -1, "av file", le_av_file);
+
+	av_set_log_level(TSRMLS_C);
+
+	// figure out the stream index first
+	if(file->flags & AV_FILE_READ) {
+		if(Z_TYPE_P(z_id) == IS_STRING) {
+			media_type = av_get_stream_type(Z_STRVAL_P(z_id) TSRMLS_CC);
+			if(media_type < 0) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "parameter 2 should be \"video\", \"audio\", \"subtitle\", or an stream index");
+				return;
+			}
+			stream_index = av_find_best_stream(file->format_cxt, media_type, -1, -1, &codec, 0);
+			if(stream_index < 0) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Cannot find a stream of type '%s'", Z_STRVAL_P(z_id));
+				return;
+			}
+		} else if(Z_TYPE_P(z_id) == IS_LONG || Z_TYPE_P(z_id) == IS_DOUBLE) {
+			stream_index = (Z_TYPE_P(z_id) == IS_DOUBLE) ? (long) Z_DVAL_P(z_id) : Z_LVAL_P(z_id);
+			if(!(stream_index >= 0 && (uint32_t) stream_index < file->stream_count)) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "Stream index must be between 0 and %d", file->stream_count);
+				return;
+			}
+		} else {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "parameter 2 should be \"video\", \"audio\", \"subtitle\", or an stream index");
+			return;
+		}
+		if(stream_index < file->stream_count) {
+			strm = file->streams[stream_index];
+			if(strm) {
+				if(strm->flags & AV_STREAM_FREED) {
+					// return it again
+					strm->flags &= ~AV_STREAM_FREED;
+					file->open_stream_count++;
+					ZEND_REGISTER_RESOURCE(return_value, strm, le_av_strm);
+				} else {
+					php_error_docref(NULL TSRMLS_CC, E_ERROR, "stream #%d is already open", stream_index);
+				}
+				return;
+			}
+		}
+	} else if(file->flags & AV_FILE_WRITE) {
+		if(Z_TYPE_P(z_id) == IS_STRING) {
+			media_type = av_get_stream_type(Z_STRVAL_P(z_id) TSRMLS_CC);
+			if(media_type < 0) {
+				php_error_docref(NULL TSRMLS_CC, E_ERROR, "parameter 2 should be \"video\", \"audio\", \"subtitle\"");
+				return;
+			}
+		}
+		if(file->flags & AV_FILE_HEADER_WRITTEN) {
+			php_error_docref(NULL TSRMLS_CC, E_ERROR, "cannot add additional streams as encoding has already begun");
+			return;
+		}
+		stream_index = file->stream_count;
+	}
 
 	if(file->flags & AV_FILE_READ) {
 		if(Z_TYPE_P(z_id) == IS_STRING) {
@@ -941,18 +1049,10 @@ PHP_FUNCTION(av_stream_open)
 #else
 		codec_cxt->get_buffer = av_stream_get_buffer;
 #endif
-	} else if(file->flags & AV_FILE_WRITE){
+	} else if(file->flags & AV_FILE_WRITE) {
 		double frame_rate;
 		uint32_t sample_rate, bit_rate, width, height, gop_size;
-		enum AVMediaType media_type;
 		enum AVCodecID codec_id;
-
-		if(Z_TYPE_P(z_id) == IS_STRING) {
-			media_type = av_get_stream_type(Z_STRVAL_P(z_id) TSRMLS_CC);
-			if(media_type < 0) {
-				return;
-			}
-		}
 
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
@@ -974,7 +1074,6 @@ PHP_FUNCTION(av_stream_open)
 		}
 
 		stream = avformat_new_stream(file->format_cxt, codec);
-		stream_index = stream->index;
 
 		codec_cxt = stream->codec;
 	    if(file->output_format->flags & AVFMT_GLOBALHEADER) {
@@ -1027,6 +1126,9 @@ PHP_FUNCTION(av_stream_open)
 			return;
 		}
 
+		// copy metadata
+		av_copy_metadata(&stream->metadata, z_options);
+
 		frame = avcodec_alloc_frame();
 		frame->pts = 0;
 	}
@@ -1047,7 +1149,11 @@ PHP_FUNCTION(av_stream_open)
 
 	if((uint32_t) stream_index >= file->stream_count) {
 		file->stream_count = stream_index + 1;
-		file->streams = erealloc(file->streams, sizeof(av_stream *) * file->stream_count);
+		if(!file->streams) {
+			file->streams = ecalloc(file->stream_count, sizeof(av_stream *));
+		} else {
+			file->streams = erealloc(file->streams, sizeof(av_stream *) * file->stream_count);
+		}
 	}
 	file->streams[stream_index] = strm;
 	file->open_stream_count++;
@@ -1226,7 +1332,7 @@ static int av_flush_pending_packets(av_file *file) {
 #define FOR_ENCODING		0
 #define FOR_DECODING		1
 
-static void av_create_picture_and_scalar(av_stream *strm, uint32_t width, uint32_t height, int purpose) {
+static void av_create_picture_and_scaler(av_stream *strm, uint32_t width, uint32_t height, int purpose) {
 	if(!strm->picture || strm->picture->width != width || strm->picture->height != height) {
 		if(strm->picture) {
 			avpicture_free((AVPicture *) strm->picture);
@@ -1237,9 +1343,9 @@ static void av_create_picture_and_scalar(av_stream *strm, uint32_t width, uint32
 		strm->picture->width = width;
 		strm->picture->height = height;
 		if(purpose == FOR_ENCODING) {
-			strm->scalar_cxt = sws_getCachedContext(strm->scalar_cxt, width, height, PIX_FMT_RGBA, strm->codec_cxt->width, strm->codec_cxt->height, strm->codec_cxt->pix_fmt, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+			strm->scaler_cxt = sws_getCachedContext(strm->scaler_cxt, width, height, PIX_FMT_RGBA, strm->codec_cxt->width, strm->codec_cxt->height, strm->codec_cxt->pix_fmt, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 		} else {
-			strm->scalar_cxt = sws_getCachedContext(strm->scalar_cxt, strm->codec_cxt->width, strm->codec_cxt->height, strm->codec_cxt->pix_fmt, width, height, PIX_FMT_RGBA, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+			strm->scaler_cxt = sws_getCachedContext(strm->scaler_cxt, strm->codec_cxt->width, strm->codec_cxt->height, strm->codec_cxt->pix_fmt, width, height, PIX_FMT_RGBA, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 		}
 	}
 }
@@ -1290,12 +1396,12 @@ static void av_transfer_picture_to_frame(av_stream *strm) {
 		strm->flags |= AV_STREAM_FRAME_BUFFER_ALLOCATED;
 	}
 	// rescale the picture to the proper dimension and transform pixels to format used by codec
-	sws_scale(strm->scalar_cxt, (const uint8_t * const *) strm->picture->data, strm->picture->linesize, 0, strm->picture->height, strm->frame->data, strm->frame->linesize);
+	sws_scale(strm->scaler_cxt, (const uint8_t * const *) strm->picture->data, strm->picture->linesize, 0, strm->picture->height, strm->frame->data, strm->frame->linesize);
 }
 
 static void av_transfer_picture_from_frame(av_stream *strm) {
 	// rescale the picture and transform pixels to RGBA
-	sws_scale(strm->scalar_cxt, (const uint8_t * const *) strm->frame->data, strm->frame->linesize, 0, strm->frame->height, strm->picture->data, strm->picture->linesize);
+	sws_scale(strm->scaler_cxt, (const uint8_t * const *) strm->frame->data, strm->frame->linesize, 0, strm->frame->height, strm->picture->data, strm->picture->linesize);
 }
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
@@ -1659,7 +1765,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 }
 
 static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double time TSRMLS_DC) {
-	av_create_picture_and_scalar(strm, image->sx, image->sy, FOR_ENCODING);
+	av_create_picture_and_scaler(strm, image->sx, image->sy, FOR_ENCODING);
 	av_copy_image_from_gd(strm->picture, image);
 	av_transfer_picture_to_frame(strm);
 	if(isnan(time)) {
@@ -1671,7 +1777,7 @@ static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double tim
 
 static int av_decode_image_to_gd(av_stream *strm, gdImagePtr image, double *p_time TSRMLS_DC) {
 	if(av_decode_next_frame(strm, p_time TSRMLS_CC)) {
-		av_create_picture_and_scalar(strm, image->sx, image->sy, FOR_DECODING);
+		av_create_picture_and_scaler(strm, image->sx, image->sy, FOR_DECODING);
 		av_transfer_picture_from_frame(strm);
 		av_copy_image_to_gd(strm->picture, image);
 		return TRUE;
@@ -1792,6 +1898,13 @@ PHP_FUNCTION(av_stream_write_image)
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
 	ZEND_FETCH_RESOURCE(image, gdImagePtr, &z_img, -1, "image", le_gd);
+
+	av_set_log_level(TSRMLS_C);
+
+	if(strm->codec->type != AVMEDIA_TYPE_VIDEO) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a video stream");
+		return;
+	}
 	if(av_encode_image_from_gd(strm, image, time TSRMLS_CC)) {
 		RETURN_TRUE;
 	} else {
@@ -1812,6 +1925,13 @@ PHP_FUNCTION(av_stream_write_pcm)
 		return;
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
+
+	av_set_log_level(TSRMLS_C);
+
+	if(strm->codec->type != AVMEDIA_TYPE_AUDIO) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not an audio stream");
+		return;
+	}
 	if(av_encode_pcm_from_zval(strm, z_buffer, time TSRMLS_CC)) {
 		RETURN_TRUE;
 	} else {
@@ -1832,10 +1952,15 @@ PHP_FUNCTION(av_stream_read_image)
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rr|z", &z_strm, &z_img, &z_time) == FAILURE) {
 		return;
 	}
-
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
 	ZEND_FETCH_RESOURCE(image, gdImagePtr, &z_img, -1, "image", le_gd);
 
+	av_set_log_level(TSRMLS_C);
+
+	if(strm->codec->type != AVMEDIA_TYPE_VIDEO) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a video stream");
+		return;
+	}
 	if(av_decode_image_to_gd(strm, image, &time TSRMLS_CC)) {
 		if(z_time) {
 			zval_dtor(z_time);
@@ -1861,6 +1986,12 @@ PHP_FUNCTION(av_stream_read_pcm)
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
 
+	av_set_log_level(TSRMLS_C);
+
+	if(strm->codec->type != AVMEDIA_TYPE_AUDIO) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not an audio stream");
+		return;
+	}
 	if(av_decode_pcm_to_zval(strm, z_buffer, &time TSRMLS_CC)) {
 		if(z_time) {
 			zval_dtor(z_time);
@@ -1884,6 +2015,7 @@ PHP_FUNCTION(av_stream_close)
 		return;
 	}
 	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
+
 	RETVAL_TRUE;
 	zend_list_delete(Z_LVAL_P(z_strm));
 }
