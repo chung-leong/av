@@ -51,6 +51,7 @@ struct av_stream {
 
 	AVFrame *frame;						// the current frame
 	int64_t frame_pts;					// the PTS of the packet that triggered the creation of the frame (used during decoding only)
+	double frame_duration;
 	AVFrame *next_frame;
 	double next_frame_time;
 

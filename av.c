@@ -812,6 +812,7 @@ PHP_FUNCTION(av_file_stat)
 		ADD_STRING(stream, "codec_name", codec_name);
 		ADD_LONG(stream, "bit_rate", c->bit_rate);
 		ADD_DOUBLE(stream, "duration", (double) s->duration * av_q2d(s->time_base));
+		ADD_DOUBLE(stream, "frame_rate", av_q2d(s->avg_frame_rate));
 
 		ADD_LONG(stream, "height", c->height);
 		ADD_LONG(stream, "width", c->width);
@@ -894,6 +895,7 @@ PHP_FUNCTION(av_stream_open)
 	av_file *file;
 	av_stream *strm;
 	int32_t stream_index;
+	double frame_duration;
 
 	if(zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rz|a", &z_strm, &z_id, &z_options) == FAILURE) {
 		return;
@@ -940,11 +942,8 @@ PHP_FUNCTION(av_stream_open)
 		codec_cxt->get_buffer = av_stream_get_buffer;
 #endif
 	} else if(file->flags & AV_FILE_WRITE){
-		double frame_rate = av_get_option_double(z_options, "frame_rate", 25.0);
-		uint32_t sample_rate = av_get_option_long(z_options, "sampling_rate", 44100);
-		uint32_t bit_rate = av_get_option_long(z_options, "bit_rate", 256000);
-		uint32_t width = av_get_option_long(z_options, "width", 320);
-		uint32_t height = av_get_option_long(z_options, "height", 240);
+		double frame_rate;
+		uint32_t sample_rate, bit_rate, width, height, gop_size;
 		enum AVMediaType media_type;
 		enum AVCodecID codec_id;
 
@@ -987,18 +986,28 @@ PHP_FUNCTION(av_stream_open)
 		codec_cxt->thread_count = 1;
 		switch(media_type) {
 			case AVMEDIA_TYPE_VIDEO:
+				frame_rate = av_get_option_double(z_options, "frame_rate", 24.0);
+				frame_duration = 1 / frame_rate;
+				bit_rate = av_get_option_long(z_options, "bit_rate", 256000);
+				width = av_get_option_long(z_options, "width", 320);
+				height = av_get_option_long(z_options, "height", 240);
+				gop_size = av_get_option_long(z_options, "gop", 600);
+
 				file->format_cxt->video_codec_id = codec->id;
 				codec_cxt->width = width;
 				codec_cxt->height = height;
-				codec_cxt->time_base = av_d2q(1 / frame_rate, 255);
+				codec_cxt->time_base = av_d2q(frame_duration, 1024);
 				codec_cxt->pix_fmt = codec->pix_fmts[0];
-				codec_cxt->gop_size = 600;
+				codec_cxt->gop_size = gop_size;
 				codec_cxt->bit_rate = bit_rate;
 				break;
 			case AVMEDIA_TYPE_AUDIO:
+				sample_rate = av_get_option_long(z_options, "sampling_rate", 44100);
+				bit_rate = av_get_option_long(z_options, "bit_rate", 64000);
+
 				file->format_cxt->audio_codec_id = codec->id;
 				codec_cxt->sample_fmt = codec->sample_fmts[0];
-				codec_cxt->time_base = av_d2q(1 / sample_rate, 255);
+				codec_cxt->time_base = av_d2q(1 / sample_rate, 1024);
 				codec_cxt->sample_rate = sample_rate;
 				codec_cxt->channel_layout = AV_CH_LAYOUT_STEREO;
 				codec_cxt->channels = 2;
@@ -1033,6 +1042,7 @@ PHP_FUNCTION(av_stream_open)
 	strm->file = file;
 	strm->frame = frame;
 	strm->index = stream_index;
+	strm->frame_duration = frame_duration;
 	codec_cxt->opaque = strm;
 
 	if((uint32_t) stream_index >= file->stream_count) {
@@ -1561,7 +1571,6 @@ static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, doubl
 					bytes_decoded = avcodec_decode_audio4(strm->codec_cxt, dest_frame, &frame_finished, strm->packet);
 					break;
 				case AVMEDIA_TYPE_SUBTITLE:
-					//bytes_decoded = avcodec_decode_subtitle2(strm->codec_cxt, dest_frame, &frame_finished, strm->packet);
 					break;
 				default:
 					bytes_decoded = -1;
@@ -1653,6 +1662,10 @@ static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double tim
 	av_create_picture_and_scalar(strm, image->sx, image->sy, FOR_ENCODING);
 	av_copy_image_from_gd(strm->picture, image);
 	av_transfer_picture_to_frame(strm);
+	if(isnan(time)) {
+		time = strm->next_frame_time;
+	}
+	strm->next_frame_time = time + strm->frame_duration;
 	return av_encode_next_frame(strm, time);
 }
 
@@ -1715,7 +1728,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 			if(EXPECTED(-1.0 <= sample && sample <= 1.0)) {
 				dst_samples[i] = sample;
 			} else {
-				dst_samples[i] = (sample < -1) -1.0 : 1.0;
+				dst_samples[i] = (sample < -1) ? -1.0 : 1.0;
 			}
 		}
 		src_samples_remaining -= samples_to_copy;

@@ -6,6 +6,8 @@ $file_in = av_file_open("$folder/source-code.mov", "rb");
 $file_out1 = av_file_open("$folder/source-code.mp4", "wb");
 $file_out2 = av_file_open("$folder/source-code.webm", "wb");
 
+print_r(av_file_stat($file_in));
+
 $a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");
 
