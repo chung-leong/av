@@ -1,7 +1,7 @@
 <?php
 
 $folder = dirname(__FILE__);
-$image = imagecreatetruecolor(852, 480);
+$image = imagecreatetruecolor(852 / 4, 480 / 4);
 $file_in = av_file_open("$folder/source-code.mov", "r");
 $file_out = av_file_open("$folder/source-code-output.gif", "w");
 
@@ -13,7 +13,7 @@ while(!av_file_eof($file_in)) {
 	if(av_stream_read_image($v_strm_in, $image, $v_time)) {
 		av_stream_write_image($v_strm_out, $image, $v_time);
 	}
-	if($v_time > 5) {
+	if($v_time > 8) {
 		break;
 	}
 }
