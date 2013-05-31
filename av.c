@@ -674,6 +674,12 @@ static int av_seek_file(av_file *file, double time, int precise) {
 			while(strm->packet) {
 				av_shift_packet(strm);
 			}
+			if(strm->next_frame) {
+				// remove the next frame as well(retrieved by a previous precise seek) 
+				avcodec_free_frame(&strm->next_frame);
+			    strm->next_frame = NULL;
+			    strm->next_frame_time = 0;
+			}
 		}
 	}
 
@@ -1841,7 +1847,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 			}
 			// read the next frame so we can check if the current frame is the closest
 			// to the time sought without going over
-			if(av_decode_frame_at_cursor(strm, next_frame, &next_frame_time TSRMLS_CC) < 0) {
+			if(!av_decode_frame_at_cursor(strm, next_frame, &next_frame_time TSRMLS_CC)) {
 			    avcodec_free_frame(&next_frame);
 			    next_frame = NULL;
 				break;

@@ -1,3 +1,6 @@
+--TEST--
+Animated gif test
+--FILE--
 <?php
 
 $folder = dirname(__FILE__);
@@ -24,4 +27,8 @@ av_file_close($file_out);
 av_stream_close($v_strm_in);
 av_file_close($file_in);
 
+echo filesize("$folder/source-code-output.gif");
+
 ?>
+--EXPECTREGEX--
+\d{7,8}

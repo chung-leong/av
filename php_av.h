@@ -44,7 +44,9 @@ extern zend_module_entry av_module_entry;
 #include <avcodec.h>
 #include <avformat.h>
 #include <swscale.h>
+#ifdef HAVE_SWSRESAMPLE
 #include <swresample.h>
+#endif
 
 typedef struct av_file av_file;
 typedef struct av_stream av_stream;

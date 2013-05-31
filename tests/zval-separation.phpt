@@ -1,3 +1,6 @@
+--TEST--
+Transcode test
+--FILE--
 <?php
 
 $folder = dirname(__FILE__);
@@ -13,3 +16,5 @@ av_stream_read_pcm($a_strm_in, $var1, $a_time);
 echo $var2;
 
 ?>
+--EXPECT--
+This is a test

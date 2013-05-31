@@ -4,13 +4,17 @@ dnl config.m4 for extension av
 PHP_ARG_WITH(av, whether to include libav support,
 [  --with-av             Include libav support])
 
+if test -z "$PHP_AV_DIR"; then
+  PHP_ARG_WITH(av-dir, for the location of libav,
+  [  --with-av-dir[=DIR]     AV: Set the path to libav install prefix], no, no)
+fi
 
 if test "$PHP_AV" != "no"; then
   # --with-av -> check with-path
   SEARCH_PATH="/usr/local /usr"     
-  SEARCH_FOR="/include/libavcodec/avcodec.h" 
+  SEARCH_FOR="/PHP_AV_DIR/libavcodec/avcodec.h" 
   if test -r $PHP_AV/$SEARCH_FOR; then
-    AV_DIR=$PHP_AV
+    AV_DIR=$PHP_AV_DIR
   else # search default path list
     AC_MSG_CHECKING([for libavcodec files in default path])
     for i in $SEARCH_PATH ; do

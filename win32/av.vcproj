@@ -76,11 +76,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="php5ts_debug.lib odbc32.lib odbccp32.lib ffmpeg\lib\avcodec.lib ffmpeg\lib\avformat.lib ffmpeg\lib\avutil.lib ffmpeg\lib\swresample.lib ffmpeg\lib\swscale.lib"
+				AdditionalDependencies="php5ts_debug.lib odbc32.lib odbccp32.lib avcodec.lib avformat.lib avutil.lib swresample.lib swscale.lib"
 				OutputFile="..\..\..\Debug_TS/php_av.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="..\..\..\Debug_TS"
+				AdditionalLibraryDirectories="..\..\..\Debug_TS;ffmpeg\lib"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="..\Debug_TS/php_av.pdb"
 				SubSystem="2"
@@ -181,11 +181,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="php5ts.lib odbc32.lib odbccp32.lib ffmpeg\lib\avcodec.lib ffmpeg\lib\avformat.lib ffmpeg\lib\avutil.lib ffmpeg\lib\swresample.lib ffmpeg\lib\swscale.lib"
+				AdditionalDependencies="php5ts.lib odbc32.lib odbccp32.lib avcodec.lib avformat.lib avutil.lib swresample.lib swscale.lib"
 				OutputFile="..\..\..\Release_TS/php_av.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="..\..\..\Release_TS,..\..\Release_TS_Inline"
+				AdditionalLibraryDirectories="..\..\..\Release_TS;..\..\Release_TS_Inline;ffmpeg\lib"
 				GenerateDebugInformation="false"
 				ProgramDatabaseFile="..\Release_TS/php_av.pdb"
 				SubSystem="2"
