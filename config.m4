@@ -12,8 +12,8 @@ fi
 if test "$PHP_AV" != "no"; then
   # --with-av -> check with-path
   SEARCH_PATH="/usr/local /usr"     
-  SEARCH_FOR="/PHP_AV_DIR/libavcodec/avcodec.h" 
-  if test -r $PHP_AV/$SEARCH_FOR; then
+  SEARCH_FOR="include/libavcodec/avcodec.h" 
+  if test -r $PHP_AV_DIR/$SEARCH_FOR; then
     AV_DIR=$PHP_AV_DIR
   else # search default path list
     AC_MSG_CHECKING([for libavcodec files in default path])
