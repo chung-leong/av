@@ -151,8 +151,8 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("av.verbose_reporting", "0", PHP_INI_ALL, OnUpdateBool, verbose_reporting, zend_av_globals, av_globals)
 
 	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "2", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "2", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "2", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -163,8 +163,8 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 	av_globals->optimize_output = TRUE;
 	av_globals->verbose_reporting = FALSE;
 	av_globals->max_threads_per_stream = 2;
-	av_globals->threads_per_video_stream = 1;
-	av_globals->threads_per_audio_stream = 1;
+	av_globals->threads_per_video_stream = 2;
+	av_globals->threads_per_audio_stream = 2;
 }
 /* }}} */
 
@@ -1820,7 +1820,7 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 	if(strm->flags & AV_STREAM_SOUGHT) {
 		// keep decoding frames until we have two frames straddling the time sought
 		AVFrame *current_frame = strm->frame, *next_frame = NULL;
-		double current_frame_time, next_frame_time;
+		double current_frame_time, next_frame_time = 0;
 		do {
 			if(next_frame) {
 				// the one read earlier become the current frame
