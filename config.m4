@@ -30,8 +30,7 @@ if test "$PHP_AV" != "no"; then
   PHP_ADD_INCLUDE($AV_DIR/include/libavformat/)
   PHP_ADD_INCLUDE($AV_DIR/include/libavfilter/)
   PHP_ADD_INCLUDE($AV_DIR/include/libswscale/)      
-  PHP_ADD_INCLUDE($AV_DIR/include/libswresample/)
-              
+
   if test -z "$AV_DIR"; then
      AC_MSG_RESULT([not found])
      AC_MSG_ERROR([Please reinstall libavcodec distribution])
@@ -72,6 +71,30 @@ if test "$PHP_AV" != "no"; then
   ],[
     -L$AV_DIR/lib -lm
   ]) 
+
+  PHP_CHECK_LIBRARY(avformat,ffurl_read_complete,
+  [
+    AC_DEFINE(HAVE_FFURL_READ_COMPLETE,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
+
+  PHP_CHECK_LIBRARY(avformat,ffurl_write,
+  [
+    AC_DEFINE(HAVE_FFURL_WRITE,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
+  
+  PHP_CHECK_LIBRARY(avformat,ffurl_seek,
+  [
+    AC_DEFINE(HAVE_FFURL_SEEK,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
   
   PHP_CHECK_LIBRARY(avformat,avio_open,
   [
@@ -81,8 +104,8 @@ if test "$PHP_AV" != "no"; then
     AC_MSG_ERROR([wrong libavformat lib version or lib not found])
   ],[
     -L$AV_DIR/lib -lm
-  ]) 
-
+  ])
+  
   PHP_CHECK_LIBRARY(avutil,av_dict_get,
   [
     PHP_ADD_LIBRARY_WITH_PATH(avutil, $AV_DIR/lib, AV_SHARED_LIBADD)
@@ -103,14 +126,29 @@ if test "$PHP_AV" != "no"; then
     -L$AV_DIR/lib -lm
   ]) 
 
-  PHP_CHECK_LIBRARY(swresample,swr_convert,
-  [
-    PHP_ADD_LIBRARY_WITH_PATH(swresample, $AV_DIR/lib, AV_SHARED_LIBADD)
-    AC_DEFINE(HAVE_SWSRESAMPLE,1,[ ])
-  ],[
-  ],[
-    -L$AV_DIR/lib -lm
-  ]) 
+  if test -r "$AV_DIR/include/libswresample/swresample.h"; then
+    PHP_ADD_INCLUDE($AV_DIR/include/libswresample/)
+    PHP_CHECK_LIBRARY(swresample,swr_convert,
+    [
+      PHP_ADD_LIBRARY_WITH_PATH(swresample, $AV_DIR/lib, AV_SHARED_LIBADD)
+      AC_DEFINE(HAVE_SWRESAMPLE,1,[ ])
+    ],[
+    ],[
+      -L$AV_DIR/lib -lm
+    ])
+  fi 
+
+  if test -r "$AV_DIR/include/libavresample/avresample.h"; then
+    PHP_ADD_INCLUDE($AV_DIR/include/libavresample/)
+    PHP_CHECK_LIBRARY(avresample,avresample_convert,
+    [
+      PHP_ADD_LIBRARY_WITH_PATH(avresample, $AV_DIR/lib, AV_SHARED_LIBADD)
+      AC_DEFINE(HAVE_AVRESAMPLE,1,[ ])
+    ],[
+    ],[
+      -L$AV_DIR/lib -lm
+    ])
+  fi 
   
   PHP_SUBST(AV_SHARED_LIBADD)
 

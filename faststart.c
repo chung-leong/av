@@ -267,3 +267,132 @@ error_out:
 	}
     return result;
 }
+
+// these functions are not public in libav for some reason
+#if !defined(HAVE_FFURL_READ_COMPLETE) || !defined(HAVE_FFURL_WRITE) || !defined(HAVE_FFURL_SEEK)
+typedef struct URLContext {
+    const AVClass *av_class;    /**< information for av_log(). Set by url_open(). */
+    struct URLProtocol *prot;
+    void *priv_data;
+    char *filename;             /**< specified URL */
+    int flags;
+    int max_packet_size;        /**< if non zero, the stream is packetized with this max packet size */
+    int is_streamed;            /**< true if streamed (no seek possible), default = false */
+    int is_connected;
+    AVIOInterruptCB interrupt_callback;
+} URLContext;
+
+typedef struct URLProtocol {
+    const char *name;
+    int     (*url_open)( URLContext *h, const char *url, int flags);
+    /**
+     * This callback is to be used by protocols which open further nested
+     * protocols. options are then to be passed to ffurl_open()/ffurl_connect()
+     * for those nested protocols.
+     */
+    int     (*url_open2)(URLContext *h, const char *url, int flags, AVDictionary **options);
+
+    /**
+     * Read data from the protocol.
+     * If data is immediately available (even less than size), EOF is
+     * reached or an error occurs (including EINTR), return immediately.
+     * Otherwise:
+     * In non-blocking mode, return AVERROR(EAGAIN) immediately.
+     * In blocking mode, wait for data/EOF/error with a short timeout (0.1s),
+     * and return AVERROR(EAGAIN) on timeout.
+     * Checking interrupt_callback, looping on EINTR and EAGAIN and until
+     * enough data has been read is left to the calling function; see
+     * retry_transfer_wrapper in avio.c.
+     */
+    int     (*url_read)( URLContext *h, unsigned char *buf, int size);
+    int     (*url_write)(URLContext *h, const unsigned char *buf, int size);
+    int64_t (*url_seek)( URLContext *h, int64_t pos, int whence);
+    int     (*url_close)(URLContext *h);
+    struct URLProtocol *next;
+    int (*url_read_pause)(URLContext *h, int pause);
+    int64_t (*url_read_seek)(URLContext *h, int stream_index,
+                             int64_t timestamp, int flags);
+    int (*url_get_file_handle)(URLContext *h);
+    int (*url_get_multi_file_handle)(URLContext *h, int **handles,
+                                     int *numhandles);
+    int (*url_shutdown)(URLContext *h, int flags);
+    int priv_data_size;
+    const AVClass *priv_data_class;
+    int flags;
+    int (*url_check)(URLContext *h, int mask);
+} URLProtocol;
+#endif
+
+#if !defined(HAVE_FFURL_READ_COMPLETE) || !defined(HAVE_FFURL_WRITE)
+int ff_check_interrupt(AVIOInterruptCB *cb)
+{
+    int ret;
+    if (cb && cb->callback && (ret = cb->callback(cb->opaque)))
+        return ret;
+    return 0;
+}
+
+static inline int retry_transfer_wrapper(URLContext *h, unsigned char *buf, int size, int size_min,
+                                         int (*transfer_func)(URLContext *h, unsigned char *buf, int size))
+{
+    int ret, len;
+    int fast_retries = 5;
+
+    len = 0;
+    while (len < size_min) {
+        ret = transfer_func(h, buf+len, size-len);
+        if (ret == AVERROR(EINTR))
+            continue;
+        if (h->flags & AVIO_FLAG_NONBLOCK)
+            return ret;
+        if (ret == AVERROR(EAGAIN)) {
+            ret = 0;
+            if (fast_retries)
+                fast_retries--;
+            else
+                av_usleep(1000);
+        } else if (ret < 1)
+            return ret < 0 ? ret : len;
+        if (ret)
+           fast_retries = FFMAX(fast_retries, 2);
+        len += ret;
+        if (ff_check_interrupt(&h->interrupt_callback))
+            return AVERROR_EXIT;
+    }
+    return len;
+}
+#endif
+
+#if !defined(HAVE_FFURL_READ_COMPLETE)
+int ffurl_read_complete(URLContext *h, unsigned char *buf, int size)
+{
+    if (!(h->flags & AVIO_FLAG_READ))
+        return AVERROR(EIO);
+    return retry_transfer_wrapper(h, buf, size, size, h->prot->url_read);
+}
+#endif
+
+#if !defined(HAVE_FFURL_WRITE)
+int ffurl_write(URLContext *h, const unsigned char *buf, int size)
+{
+    if (!(h->flags & AVIO_FLAG_WRITE))
+        return AVERROR(EIO);
+    /* avoid sending too big packets */
+    if (h->max_packet_size && size > h->max_packet_size)
+        return AVERROR(EIO);
+
+    return retry_transfer_wrapper(h, buf, size, size, h->prot->url_write);
+}
+#endif
+
+#if !defined(HAVE_FFURL_SEEK)
+int64_t ffurl_seek(URLContext *h, int64_t pos, int whence)
+{
+    int64_t ret;
+
+    if (!h->prot->url_seek)
+        return AVERROR(ENOSYS);
+    ret = h->prot->url_seek(h, pos, whence & ~AVSEEK_FORCE);
+    return ret;
+}
+#endif

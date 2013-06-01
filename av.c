@@ -214,8 +214,11 @@ static void av_free_file(av_file *file) {
 					sws_freeContext(strm->scaler_cxt);
 				}
 				if(strm->resampler_cxt) {
-#ifdef HAVE_SWSRESAMPLE
+#if defined(HAVE_SWRESAMPLE)
 					swr_free(&strm->resampler_cxt);
+#elif defined(HAVE_AVRESAMPLE)
+					avresample_close(strm->resampler_cxt);
+					avresample_free(&strm->resampler_cxt);
 #else
 					audio_resample_close(strm->resampler_cxt);
 					if(strm->deplanarized_samples) {
@@ -896,7 +899,14 @@ PHP_FUNCTION(av_file_stat)
 		array_init(stream);
 		zend_hash_next_index_insert(HASH_OF(streams), (void *) &stream, sizeof(zval *), NULL);
 
-		stream_type = av_get_media_type_string(c->codec_type);
+	    switch (c->codec_type) {
+	    	case AVMEDIA_TYPE_VIDEO: stream_type = "video"; break;
+	    	case AVMEDIA_TYPE_AUDIO: stream_type = "audio"; break;
+	    	case AVMEDIA_TYPE_DATA: stream_type = "data"; break;
+	    	case AVMEDIA_TYPE_SUBTITLE: stream_type = "subtitle"; break;
+	    	case AVMEDIA_TYPE_ATTACHMENT: stream_type = "attachment"; break;
+	    	default: stream_type = NULL;
+	    }
 		codec = (d) ? d->name : "unknown";
 		codec_name = (d) ? d->long_name : "unknown";
 
@@ -1472,22 +1482,39 @@ static void av_create_picture_and_scaler(av_stream *strm, uint32_t width, uint32
 	}
 }
 
+int av_opt_set_int(void *obj, const char *name, int64_t val, int search_flags);
+
 static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
-#ifndef HAVE_SWSRESAMPLE 
-		enum AVSampleFormat codec_format;
-#endif
 		double frame_duration = (double) strm->codec_cxt->frame_size / strm->codec_cxt->sample_rate;
-		strm->sample_buffer_size = (uint32_t) (frame_duration * 44100);
 
-#ifdef HAVE_SWSRESAMPLE
+#if defined(HAVE_SWRESAMPLE)
 		if(purpose == FOR_ENCODING) {
 			strm->resampler_cxt = swr_alloc_set_opts(NULL, strm->codec_cxt->channel_layout, strm->codec_cxt->sample_fmt, strm->codec_cxt->sample_rate, AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, 44100, 0, NULL);
 		} else {
 			strm->resampler_cxt = swr_alloc_set_opts(NULL, AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, 44100, strm->codec_cxt->channel_layout, strm->codec_cxt->sample_fmt, strm->codec_cxt->sample_rate, 0, NULL);
 		}
 		swr_init(strm->resampler_cxt);
+#elif defined(HAVE_AVRESAMPLE)
+		strm->resampler_cxt = avresample_alloc_context();
+		if(purpose == FOR_ENCODING) {
+			 av_opt_set_int(strm->resampler_cxt, "out_channel_layout", strm->codec_cxt->channel_layout, 0);
+			 av_opt_set_int(strm->resampler_cxt, "out_sample_fmt",     strm->codec_cxt->sample_fmt, 0);
+			 av_opt_set_int(strm->resampler_cxt, "out_sample_rate",    strm->codec_cxt->sample_rate, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_channel_layout",  AV_CH_LAYOUT_STEREO, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_sample_fmt",      AV_SAMPLE_FMT_FLT, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_sample_rate",     44100, 0);
+		} else {
+			 av_opt_set_int(strm->resampler_cxt, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
+			 av_opt_set_int(strm->resampler_cxt, "out_sample_fmt",     AV_SAMPLE_FMT_FLT, 0);
+			 av_opt_set_int(strm->resampler_cxt, "out_sample_rate",    44100, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_channel_layout",  strm->codec_cxt->channel_layout, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_sample_fmt",      strm->codec_cxt->sample_fmt, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_sample_rate",     strm->codec_cxt->sample_rate, 0);
+		}
+		avresample_open(strm->resampler_cxt);
 #else
+		enum AVSampleFormat codec_format;
 		if(strm->codec_cxt->sample_fmt >= AV_SAMPLE_FMT_U8P && strm->codec_cxt->sample_fmt <= AV_SAMPLE_FMT_DBLP) {
 			// need to deplanarized the samples before put them through audio_resample
 			uint32_t deplanar_buffer_size;
@@ -1504,6 +1531,7 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 			strm->resampler_cxt =  av_audio_resample_init(2, strm->codec_cxt->channels, 44100, strm->codec_cxt->sample_rate, AV_SAMPLE_FMT_FLT, codec_format, 16, 10, 0, 0.8);
 		}
 #endif
+		strm->sample_buffer_size = (uint32_t) (frame_duration * 44100);
 		strm->samples = av_malloc(sizeof(float) * strm->sample_buffer_size * 2);
 	}
 }
@@ -1527,10 +1555,6 @@ static void av_transfer_picture_from_frame(av_stream *strm) {
 }
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
-#ifndef HAVE_SWSRESAMPLE
-	short *dest_buffer;
-#endif
-
 	// allocate the audio frame if it's not there
 	if(!(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED)) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
@@ -1541,8 +1565,10 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 		avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, (uint8_t *) samples, buffer_size, 1);
 		strm->flags |= AV_STREAM_AUDIO_BUFFER_ALLOCATED;
 	}
-#ifdef HAVE_SWSRESAMPLE
+#if defined(HAVE_SWRESAMPLE)
 	swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_count);
+#elif defined(HAVE_AVRESAMPLE)
+	avresample_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, 0, strm->frame->nb_samples, (uint8_t **) &strm->samples, 0, strm->sample_count);
 #else
 	if(strm->deplanarized_samples) {
 		int32_t i, j;
@@ -1603,17 +1629,18 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 				}
 			}	break;
 		}
-		dest_buffer = strm->deplanarized_samples;
+		audio_resample(strm->resampler_cxt, strm->deplanarized_samples, (short *) strm->samples, strm->sample_count);
 	} else {
-		dest_buffer = (short *) strm->frame->data[0];
+		audio_resample(strm->resampler_cxt, (short *) strm->frame->data[0], (short *) strm->samples, strm->sample_count);
 	}
-	audio_resample(strm->resampler_cxt, dest_buffer, (short *) strm->samples, strm->sample_count);
 #endif
 }
 
 static void av_transfer_pcm_from_frame(av_stream *strm) {
-#ifdef HAVE_SWSRESAMPLE
+#if defined(HAVE_SWRESAMPLE)
 	strm->sample_count = swr_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, strm->sample_buffer_size, (const uint8_t **) strm->frame->data, strm->frame->nb_samples);
+#elif defined(HAVE_AVRESAMPLE)
+	strm->sample_count = avresample_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, 0, strm->sample_buffer_size, (uint8_t **) strm->frame->data, 0, strm->frame->nb_samples);
 #else
 	short *src_buffer;
 	if(strm->deplanarized_samples) {

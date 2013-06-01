@@ -44,8 +44,10 @@ extern zend_module_entry av_module_entry;
 #include <avcodec.h>
 #include <avformat.h>
 #include <swscale.h>
-#ifdef HAVE_SWSRESAMPLE
+#if defined(HAVE_SWRESAMPLE)
 #include <swresample.h>
+#elif defined(HAVE_AVRESAMPLE)
+#include <avresample.h>
 #endif
 
 typedef struct av_file av_file;
@@ -69,8 +71,10 @@ struct av_stream {
 	uint32_t sample_count;				// the number of samples currently buffered
 	uint32_t sample_buffer_size;		// the number of samples in an audio frame
 	double sample_start_time;
-#ifdef HAVE_SWSRESAMPLE
+#if defined(HAVE_SWRESAMPLE)
 	SwrContext *resampler_cxt;			// resampler context
+#elif defined(HAVE_AVRESAMPLE)
+	AVAudioResampleContext * resampler_cxt;
 #else
 	short *deplanarized_samples;		// buffer for planar to interleave conversion
 	ReSampleContext *resampler_cxt;		// resampler context
