@@ -1202,7 +1202,16 @@ PHP_FUNCTION(av_stream_open)
 						return;
 					}
 				} else {
-					pix_fmt = codec->pix_fmts[0];
+					if(codec->pix_fmts) {
+						pix_fmt = codec->pix_fmts[0];
+					} else {
+						// not sure why it is missing in earlier versions of libavcodec
+						if(codec->id == AV_CODEC_ID_GIF) {
+							pix_fmt = AV_PIX_FMT_RGB8;
+						} else {
+							pix_fmt = AV_PIX_FMT_RGB24;
+						}
+					}
 				}
 
 				file->format_cxt->video_codec_id = codec->id;
@@ -1985,9 +1994,7 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 		av_transfer_pcm_from_frame(strm);
 
 		data_len = sizeof(float) * 2 * strm->sample_count;
-		if(Z_TYPE_P(buffer) == IS_STRING) {
-			Z_STRVAL_P(buffer) = erealloc(Z_STRVAL_P(buffer), data_len + 1);
-		} else {
+		if(Z_TYPE_P(buffer) != IS_STRING || Z_STRLEN_P(buffer) < data_len) {
 			zval_dtor(buffer);
 			Z_TYPE_P(buffer) = IS_STRING;
 			Z_STRVAL_P(buffer) = emalloc(data_len + 1);
