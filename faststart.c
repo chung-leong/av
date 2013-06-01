@@ -270,6 +270,7 @@ error_out:
 
 // these functions are not public in libav for some reason
 #if !defined(HAVE_FFURL_READ_COMPLETE) || !defined(HAVE_FFURL_WRITE) || !defined(HAVE_FFURL_SEEK)
+#if LIBAVFORMAT_VERSION_MAJOR > 53
 typedef struct URLContext {
     const AVClass *av_class;    /**< information for av_log(). Set by url_open(). */
     struct URLProtocol *prot;
@@ -322,6 +323,7 @@ typedef struct URLProtocol {
     int (*url_check)(URLContext *h, int mask);
 } URLProtocol;
 #endif
+#endif
 
 #if !defined(HAVE_FFURL_READ_COMPLETE) || !defined(HAVE_FFURL_WRITE)
 int ff_check_interrupt(AVIOInterruptCB *cb)
@@ -350,7 +352,7 @@ static inline int retry_transfer_wrapper(URLContext *h, unsigned char *buf, int 
             if (fast_retries)
                 fast_retries--;
             else
-                av_usleep(1000);
+                usleep(1000);
         } else if (ret < 1)
             return ret < 0 ? ret : len;
         if (ret)

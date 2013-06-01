@@ -41,13 +41,27 @@ extern zend_module_entry av_module_entry;
 #include "TSRM.h"
 #endif
 
-#include <avcodec.h>
-#include <avformat.h>
-#include <swscale.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/mathematics.h>
+#include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
+#include <libavutil/pixfmt.h>
+#include <libswscale/swscale.h>
 #if defined(HAVE_SWRESAMPLE)
-#include <swresample.h>
+#include <libswreample/swresample.h>
 #elif defined(HAVE_AVRESAMPLE)
-#include <avresample.h>
+#include <libavresample/avresample.h>
+#endif
+
+#if LIBAVUTIL_VERSION_MAJOR < 53
+#define AVPixelFormat				PixelFormat
+#define AV_PIX_FMT_NONE				PIX_FMT_NONE
+#define AV_PIX_FMT_RGB8				PIX_FMT_RGB8
+#define AV_PIX_FMT_RGB24			PIX_FMT_RGB24
+
+#define AVCodecID					CodecID
+#define AV_CODEC_ID_GIF				CODEC_ID_GIF
 #endif
 
 typedef struct av_file av_file;

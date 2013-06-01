@@ -178,6 +178,26 @@ static int av_is_qt_format(AVOutputFormat *of) {
 
 static int av_flush_pending_packets(av_file *file);
 
+#ifndef HAVE_AVCODEC_FREE_FRAME
+void avcodec_free_frame(AVFrame **frame)
+{
+    AVFrame *f;
+
+    if (!frame || !*frame)
+        return;
+
+    f = *frame;
+
+    if (f->extended_data != f->data) {
+    	if (f->extended_data) {
+    		//av_freep(&f->extended_data);
+    	}
+    }
+
+    av_freep(frame);
+}
+#endif
+
 static void av_free_file(av_file *file) {
 	file->flags |= AV_FILE_FREED;
 	// don't free anything until all streams are closed
@@ -254,8 +274,11 @@ static void av_free_file(av_file *file) {
 					av_optimize_mov_file(file->format_cxt->pb);
 				}
 			}
+	        avio_close(file->format_cxt->pb);
+			avformat_free_context(file->format_cxt);
+		} else {
+			avformat_close_input(&file->format_cxt);
 		}
-		avformat_close_input(&file->format_cxt);
 		efree(file);
 	}
 }
@@ -892,7 +915,7 @@ PHP_FUNCTION(av_file_stat)
 		zval *stream;
 		AVStream *s = f->streams[i];
 		AVCodecContext *c = s->codec;
-		const AVCodecDescriptor *d = avcodec_descriptor_get(c->codec_id);
+		AVCodec *d = avcodec_find_decoder(c->codec_id);
 		const char *stream_type, *codec, *codec_name;
 
 		MAKE_STD_ZVAL(stream);
@@ -990,6 +1013,18 @@ static int av_stream_get_buffer(AVCodecContext *c, AVFrame *pic) {
 
 int av_strcasecmp(const char *a, const char *b);
 
+#ifndef HAVE_AV_CODEC_IS_ENCODER
+int av_codec_is_encoder(const AVCodec *codec)
+{
+    return codec && codec->encode2;
+}
+
+int av_codec_is_decoder(const AVCodec *codec)
+{
+    return codec && codec->decode;
+}
+#endif
+
 static int av_find_codec(const char *short_name, AVCodec **p_enc, AVCodec **p_dec)
 {
 	AVCodec *codec = NULL;
@@ -1019,8 +1054,6 @@ static int av_find_codec(const char *short_name, AVCodec **p_enc, AVCodec **p_de
     }
     return FALSE;
 }
-
-enum AVPixelFormat av_get_pix_fmt(const char *name);
 
 /* {{{ proto string av_stream_open(resource file, mixed id, [, array options])
    Create an encoder */
@@ -1388,6 +1421,30 @@ static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
 	return TRUE;
 }
 
+#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
+int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame *frame, int *got_packet_ptr) {
+	int ret;
+	TSRMLS_FETCH();
+
+	if(!AV_G(video_buffer)) {
+		AV_G(video_buffer_size) = 100000;
+		AV_G(video_buffer) = emalloc(AV_G(video_buffer_size));
+	}
+	ret = avcodec_encode_video(avctx, AV_G(video_buffer), AV_G(video_buffer_size), frame);
+
+	if(ret > 0) {
+		avpkt->size = ret;
+		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
+		avpkt->pts = avctx->coded_frame->pts;
+		memcpy(avpkt->data, AV_G(video_buffer), ret);
+		*got_packet_ptr = TRUE;
+	} else {
+		*got_packet_ptr = FALSE;
+	}
+	return ret;
+}
+#endif
+
 static void av_flush_remaining_frames(av_stream *strm) {
 	int packet_finished;
 	int result;
@@ -1481,8 +1538,6 @@ static void av_create_picture_and_scaler(av_stream *strm, uint32_t width, uint32
 		}
 	}
 }
-
-int av_opt_set_int(void *obj, const char *name, int64_t val, int search_flags);
 
 static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
@@ -1628,6 +1683,7 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 					}
 				}
 			}	break;
+			default: break;
 		}
 		audio_resample(strm->resampler_cxt, strm->deplanarized_samples, (short *) strm->samples, strm->sample_count);
 	} else {
@@ -1701,6 +1757,7 @@ static void av_transfer_pcm_from_frame(av_stream *strm) {
 					}
 				}
 			}	break;
+			default: break;
 		}
 		src_buffer = strm->deplanarized_samples;
 	} else {
@@ -1746,29 +1803,6 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 		}
 	}
 }
-
-#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
-
-int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame *frame, int *got_packet_ptr) {
-	int ret;
-	TSRMLS_FETCH();
-
-	if(!AV_G(video_buffer)) {
-		AV_G(video_buffer_size) = 100000;
-		AV_G(video_buffer) = emalloc(AV_G(video_buffer_size));
-	}
-	ret = avcodec_encode_video(avctx, AV_G(video_buffer), AV_G(video_buffer_size), frame);
-
-	if(ret > 0) {
-		avpkt->size = ret;
-		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
-		memcpy(avpkt->data, AV_G(video_buffer), ret);
-		*got_packet_ptr = TRUE;
-	}
-	return ret;
-}
-
-#endif
 
 static int av_encode_next_frame(av_stream *strm, double time) {
 	av_file *file = strm->file;

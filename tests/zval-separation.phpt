@@ -1,5 +1,5 @@
 --TEST--
-Transcode test
+Variable separation test
 --FILE--
 <?php
 

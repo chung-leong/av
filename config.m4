@@ -26,11 +26,6 @@ if test "$PHP_AV" != "no"; then
     done
   fi
   
-  PHP_ADD_INCLUDE($AV_DIR/include/libavcodec/)
-  PHP_ADD_INCLUDE($AV_DIR/include/libavformat/)
-  PHP_ADD_INCLUDE($AV_DIR/include/libavfilter/)
-  PHP_ADD_INCLUDE($AV_DIR/include/libswscale/)      
-
   if test -z "$AV_DIR"; then
      AC_MSG_RESULT([not found])
      AC_MSG_ERROR([Please reinstall libavcodec distribution])
@@ -127,7 +122,6 @@ if test "$PHP_AV" != "no"; then
   ]) 
 
   if test -r "$AV_DIR/include/libswresample/swresample.h"; then
-    PHP_ADD_INCLUDE($AV_DIR/include/libswresample/)
     PHP_CHECK_LIBRARY(swresample,swr_convert,
     [
       PHP_ADD_LIBRARY_WITH_PATH(swresample, $AV_DIR/lib, AV_SHARED_LIBADD)
@@ -139,7 +133,6 @@ if test "$PHP_AV" != "no"; then
   fi 
 
   if test -r "$AV_DIR/include/libavresample/avresample.h"; then
-    PHP_ADD_INCLUDE($AV_DIR/include/libavresample/)
     PHP_CHECK_LIBRARY(avresample,avresample_convert,
     [
       PHP_ADD_LIBRARY_WITH_PATH(avresample, $AV_DIR/lib, AV_SHARED_LIBADD)
