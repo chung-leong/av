@@ -414,7 +414,6 @@ PHP_MSHUTDOWN_FUNCTION(av)
 }
 /* }}} */
 
-#define USE_CUSTOM_MALLOC
 #ifdef USE_CUSTOM_MALLOC
 
 void *custom_malloc(size_t size) {
@@ -1472,7 +1471,8 @@ int avcodec_encode_audio2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 			avpkt->pts = frame->pts;
 		}
         if(fs_tmp) {
-			avpkt->duration = av_rescale_q(avctx->frame_size, (AVRational) { 1, avctx->sample_rate }, avctx->time_base);
+			AVRational duration = { 1, avctx->sample_rate };
+			avpkt->duration = (int) av_rescale_q(avctx->frame_size, duration, avctx->time_base);
         }
 		avpkt->flags |= AV_PKT_FLAG_KEY;
 		avctx->frame_number++;
@@ -2127,7 +2127,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 
 static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time TSRMLS_DC) {
 	if(av_decode_next_frame(strm, p_time TSRMLS_CC)) {
-		uint32_t data_len;
+		int data_len;
 
 		av_create_audio_buffer_and_resampler(strm, FOR_DECODING);
 		av_transfer_pcm_from_frame(strm);
