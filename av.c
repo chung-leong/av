@@ -181,20 +181,8 @@ static int av_flush_pending_packets(av_file *file);
 #ifndef HAVE_AVCODEC_FREE_FRAME
 void avcodec_free_frame(AVFrame **frame)
 {
-    AVFrame *f;
-
     if (!frame || !*frame)
         return;
-
-    f = *frame;
-
-    if (f->extended_data != f->data) {
-    	if (f->extended_data) {
-    		if (f->type != FF_BUFFER_TYPE_INTERNAL) {
-    			av_freep(&f->extended_data);
-    		}
-    	}
-    }
 
     av_freep(frame);
 }
@@ -426,6 +414,7 @@ PHP_MSHUTDOWN_FUNCTION(av)
 }
 /* }}} */
 
+#define USE_CUSTOM_MALLOC
 #ifdef USE_CUSTOM_MALLOC
 
 void *custom_malloc(size_t size) {
@@ -1439,6 +1428,7 @@ int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 	if(ret > 0) {
 		avpkt->size = ret;
 		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
+		avpkt->destruct = av_destruct_packet;
 		avpkt->pts = avctx->coded_frame->pts;
 		if(avctx->coded_frame && avctx->coded_frame->key_frame) {
 			avpkt->flags |= AV_PKT_FLAG_KEY;
@@ -1475,6 +1465,7 @@ int avcodec_encode_audio2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 	if(ret > 0) {
 		avpkt->size = ret;
 		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
+		avpkt->destruct = av_destruct_packet;
 		if(avctx->coded_frame) {
 			avpkt->pts = avctx->coded_frame->pts;
 		} else {
