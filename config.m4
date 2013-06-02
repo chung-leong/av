@@ -66,6 +66,22 @@ if test "$PHP_AV" != "no"; then
   ],[
     -L$AV_DIR/lib -lm
   ]) 
+  
+  PHP_CHECK_LIBRARY(avcodec,av_codec_is_encoder,
+  [
+    AC_DEFINE(HAVE_AV_CODEC_IS_ENCODER,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
+
+  PHP_CHECK_LIBRARY(avcodec,avcodec_fill_audio_frame,
+  [
+    AC_DEFINE(HAVE_AVCODEC_FILL_AUDIO_FRAME,1,[ ])
+  ],[
+  ],[
+    -L$AV_DIR/lib -lm
+  ]) 
 
   PHP_CHECK_LIBRARY(avformat,ffurl_read_complete,
   [
@@ -73,7 +89,7 @@ if test "$PHP_AV" != "no"; then
   ],[
   ],[
     -L$AV_DIR/lib -lm
-  ]) 
+  ])
 
   PHP_CHECK_LIBRARY(avformat,ffurl_write,
   [

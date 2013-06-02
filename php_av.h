@@ -49,7 +49,7 @@ extern zend_module_entry av_module_entry;
 #include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
 #if defined(HAVE_SWRESAMPLE)
-#include <libswreample/swresample.h>
+#include <libswresample/swresample.h>
 #elif defined(HAVE_AVRESAMPLE)
 #include <libavresample/avresample.h>
 #endif
@@ -86,7 +86,7 @@ struct av_stream {
 	uint32_t sample_buffer_size;		// the number of samples in an audio frame
 	double sample_start_time;
 #if defined(HAVE_SWRESAMPLE)
-	SwrContext *resampler_cxt;			// resampler context
+	struct SwrContext *resampler_cxt;	// resampler context
 #elif defined(HAVE_AVRESAMPLE)
 	AVAudioResampleContext * resampler_cxt;
 #else
@@ -161,9 +161,9 @@ PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_get_duration);
 
 ZEND_BEGIN_MODULE_GLOBALS(av)
-#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
-	uint8_t *video_buffer;
-	uint32_t video_buffer_size;
+#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2)
+	uint8_t *encoding_buffer;
+	uint32_t encoding_buffer_size;
 #endif
 
 	long max_threads_per_stream;

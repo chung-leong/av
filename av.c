@@ -190,7 +190,9 @@ void avcodec_free_frame(AVFrame **frame)
 
     if (f->extended_data != f->data) {
     	if (f->extended_data) {
-    		//av_freep(&f->extended_data);
+    		if (f->type != FF_BUFFER_TYPE_INTERNAL) {
+    			av_freep(&f->extended_data);
+    		}
     	}
     }
 
@@ -220,6 +222,7 @@ static void av_free_file(av_file *file) {
 						avpicture_free((AVPicture *) strm->frame);
 					} else if(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED) {
 						av_free(strm->frame->extended_data[0]);
+						strm->frame->extended_data[0] = NULL;
 					}
 					avcodec_free_frame(&strm->frame);
 				}
@@ -451,9 +454,9 @@ PHP_RINIT_FUNCTION(av)
 	if(le_gd == -1) {
 		le_gd = zend_fetch_list_dtor_id("gd");
 	}
-#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
-	AV_G(video_buffer) = NULL;
-	AV_G(video_buffer_size) = 0;
+#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2)
+	AV_G(encoding_buffer) = NULL;
+	AV_G(encoding_buffer_size) = 0;
 #endif
 #ifdef USE_CUSTOM_MALLOC
 	av_set_custom_malloc(custom_malloc, custom_realloc, custom_free);
@@ -467,9 +470,9 @@ PHP_RINIT_FUNCTION(av)
  */
 PHP_RSHUTDOWN_FUNCTION(av)
 {
-#ifndef HAVE_AVCODEC_ENCODE_VIDEO2
-	if(AV_G(video_buffer)) {
-		efree(AV_G(video_buffer));
+#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2)
+	if(AV_G(encoding_buffer)) {
+		efree(AV_G(encoding_buffer));
 	}
 #endif
 	return SUCCESS;
@@ -1016,7 +1019,11 @@ int av_strcasecmp(const char *a, const char *b);
 #ifndef HAVE_AV_CODEC_IS_ENCODER
 int av_codec_is_encoder(const AVCodec *codec)
 {
+#if HAVE_AVCODEC_ENCODE_AUDIO2
     return codec && codec->encode2;
+#else
+    return codec && codec->encode;
+#endif
 }
 
 int av_codec_is_decoder(const AVCodec *codec)
@@ -1402,9 +1409,6 @@ static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
 	if(packet->duration != AV_NOPTS_VALUE) {
 		packet->duration = (int) av_rescale_q(packet->duration, strm->codec_cxt->time_base, strm->stream->time_base);
 	}
-	if(strm->codec_cxt->coded_frame && strm->codec_cxt->coded_frame->key_frame) {
-		packet->flags |= AV_PKT_FLAG_KEY;
-	}
 	packet->stream_index = strm->stream->index;
 	// push the packet onto the queue
 	av_push_packet(strm, packet);
@@ -1426,17 +1430,62 @@ int avcodec_encode_video2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame 
 	int ret;
 	TSRMLS_FETCH();
 
-	if(!AV_G(video_buffer)) {
-		AV_G(video_buffer_size) = 100000;
-		AV_G(video_buffer) = emalloc(AV_G(video_buffer_size));
+	if(!AV_G(encoding_buffer)) {
+		AV_G(encoding_buffer_size) = 100000;
+		AV_G(encoding_buffer) = emalloc(AV_G(encoding_buffer_size));
 	}
-	ret = avcodec_encode_video(avctx, AV_G(video_buffer), AV_G(video_buffer_size), frame);
+	ret = avcodec_encode_video(avctx, AV_G(encoding_buffer), AV_G(encoding_buffer_size), frame);
 
 	if(ret > 0) {
 		avpkt->size = ret;
 		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
 		avpkt->pts = avctx->coded_frame->pts;
-		memcpy(avpkt->data, AV_G(video_buffer), ret);
+		if(avctx->coded_frame && avctx->coded_frame->key_frame) {
+			avpkt->flags |= AV_PKT_FLAG_KEY;
+		}
+		memcpy(avpkt->data, AV_G(encoding_buffer), ret);
+		*got_packet_ptr = TRUE;
+	} else {
+		*got_packet_ptr = FALSE;
+	}
+	return ret;
+}
+#endif
+
+#ifndef HAVE_AVCODEC_ENCODE_AUDIO2
+int avcodec_encode_audio2(AVCodecContext *avctx, AVPacket *avpkt, const AVFrame *frame, int *got_packet_ptr) {
+	int fs_tmp = 0;
+	int ret;
+	TSRMLS_FETCH();
+
+	if(!frame) {
+		*got_packet_ptr = FALSE;
+		return 0;
+	}
+	if(!AV_G(encoding_buffer)) {
+		AV_G(encoding_buffer_size) = 100000;
+		AV_G(encoding_buffer) = emalloc(AV_G(encoding_buffer_size));
+	}
+    if ((avctx->codec->capabilities & CODEC_CAP_SMALL_LAST_FRAME) && frame->nb_samples < avctx->frame_size) {
+         fs_tmp = avctx->frame_size;
+         avctx->frame_size = frame->nb_samples;
+     }
+	ret = avcodec_encode_audio(avctx, AV_G(encoding_buffer), AV_G(encoding_buffer_size), (frame) ? (const short *) frame->data[0] : NULL);
+
+	if(ret > 0) {
+		avpkt->size = ret;
+		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
+		if(avctx->coded_frame) {
+			avpkt->pts = avctx->coded_frame->pts;
+		} else {
+			avpkt->pts = frame->pts;
+		}
+        if(fs_tmp) {
+			avpkt->duration = av_rescale_q(avctx->frame_size, (AVRational) { 1, avctx->sample_rate }, avctx->time_base);
+        }
+		avpkt->flags |= AV_PKT_FLAG_KEY;
+		avctx->frame_number++;
+		memcpy(avpkt->data, AV_G(encoding_buffer), ret);
 		*got_packet_ptr = TRUE;
 	} else {
 		*got_packet_ptr = FALSE;
@@ -1608,6 +1657,44 @@ static void av_transfer_picture_from_frame(av_stream *strm) {
 	// rescale the picture and transform pixels to RGBA
 	sws_scale(strm->scaler_cxt, (const uint8_t * const *) strm->frame->data, strm->frame->linesize, 0, strm->frame->height, strm->picture->data, strm->picture->linesize);
 }
+
+#ifndef HAVE_AVCODEC_FILL_AUDIO_FRAME
+int avcodec_fill_audio_frame(AVFrame *frame, int nb_channels,
+                             enum AVSampleFormat sample_fmt, const uint8_t *buf,
+                             int buf_size, int align)
+{
+    int ch, planar, needed_size, ret = 0;
+
+    needed_size = av_samples_get_buffer_size(NULL, nb_channels,
+                                             frame->nb_samples, sample_fmt,
+                                             align);
+    if (buf_size < needed_size)
+        return AVERROR(EINVAL);
+
+    planar = av_sample_fmt_is_planar(sample_fmt);
+    if (planar && nb_channels > AV_NUM_DATA_POINTERS) {
+        if (!(frame->extended_data = av_mallocz(nb_channels *
+                                                sizeof(*frame->extended_data))))
+            return AVERROR(ENOMEM);
+    } else {
+        frame->extended_data = frame->data;
+    }
+
+    if ((ret = av_samples_fill_arrays(frame->extended_data, &frame->linesize[0],
+                                      buf, nb_channels, frame->nb_samples,
+                                      sample_fmt, align)) < 0) {
+        if (frame->extended_data != frame->data)
+            av_freep(&frame->extended_data);
+        return ret;
+    }
+    if (frame->extended_data != frame->data) {
+        for (ch = 0; ch < AV_NUM_DATA_POINTERS; ch++)
+            frame->data[ch] = frame->extended_data[ch];
+    }
+
+    return ret;
+}
+#endif
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
 	// allocate the audio frame if it's not there
