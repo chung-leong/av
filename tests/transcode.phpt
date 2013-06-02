@@ -1,5 +1,9 @@
 --TEST--
 Transcode test
+--SKIPIF--
+<?php 
+	if(!function_exists('imagecreatetruecolor')) print 'skip GD not available';
+?>
 --FILE--
 <?php
 

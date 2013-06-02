@@ -930,10 +930,10 @@ PHP_FUNCTION(av_file_stat)
 		ADD_STRING(stream, "codec_name", codec_name);
 		ADD_LONG(stream, "bit_rate", c->bit_rate);
 		ADD_DOUBLE(stream, "duration", (double) s->duration * av_q2d(s->time_base));
-		ADD_DOUBLE(stream, "frame_rate", av_q2d(s->avg_frame_rate));
+		ADD_DOUBLE(stream, "frame_rate", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? av_q2d(s->avg_frame_rate) : 0);
 
-		ADD_LONG(stream, "height", c->height);
-		ADD_LONG(stream, "width", c->width);
+		ADD_LONG(stream, "height", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->height : 0);
+		ADD_LONG(stream, "width", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->width : 0);
 
 		// add metadata of stream
 		MAKE_STD_ZVAL(metadata);

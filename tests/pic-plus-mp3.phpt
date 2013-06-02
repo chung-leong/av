@@ -1,5 +1,13 @@
 --TEST--
 MP3 as source test
+--SKIPIF--
+<?php 
+	if(!function_exists('imagecreatetruecolor')) { 
+		print 'skip GD not available'; 
+	} else if(!function_exists('imagecreatefromjpeg')) { 
+		print 'skip JPEG function not available';
+	}
+?>
 --FILE--
 <?php
 
