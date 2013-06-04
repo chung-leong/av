@@ -13,7 +13,7 @@ class PhpAv < Formula
   	with-xvid, 
   	with-theora, 
   	with-libvorbis 
-  	with-vpx,
+  	with-libvpx,
   	with-libass,
   	with-speex,
   	with-schroedinger,
