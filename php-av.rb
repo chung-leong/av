@@ -6,7 +6,7 @@ class PhpAv < Formula
   sha1 '06ddef3a26cf101ad848bbc374a28a0d9625875c'
 
   depends_on 'autoconf' => :build
-  depends_on 'ffmpeg' => [:recommended, %w{
+  depends_on 'ffmpeg' => %w{
   	with-x264
   	with-faac 
   	with-lame 
@@ -19,7 +19,7 @@ class PhpAv < Formula
   	with-schroedinger
   	with-opus
   	with-openjpeg 
-  	}]
+  	}
 
   def install
     ENV['PHP_AUTOCONF'] = '/usr/local/bin/autoconf'
