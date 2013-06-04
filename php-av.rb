@@ -7,17 +7,17 @@ class PhpAv < Formula
 
   depends_on 'autoconf' => :build
   depends_on 'ffmpeg' => [:recommended, %w{
-  	with-x264, 
-  	with-faac, 
-  	with-lame, 
-  	with-xvid, 
-  	with-theora, 
+  	with-x264
+  	with-faac 
+  	with-lame 
+  	with-xvid 
+  	with-theora 
   	with-libvorbis 
-  	with-libvpx,
-  	with-libass,
-  	with-speex,
-  	with-schroedinger,
-  	with-opus,
+  	with-libvpx
+  	with-libass
+  	with-speex
+  	with-schroedinger
+  	with-opus
   	with-openjpeg 
   	}]
 
