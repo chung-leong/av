@@ -28,6 +28,7 @@ class PhpAv < Formula
     system "./configure"
     system "make"
     system "sudo", "make", "install"
+    system "cp", "av.ini", "#{prefix}/av.ini"
   end
 
   test do
