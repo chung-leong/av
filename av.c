@@ -154,9 +154,9 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("av.optimize_output", "1", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
     STD_PHP_INI_ENTRY("av.verbose_reporting", "0", PHP_INI_ALL, OnUpdateBool, verbose_reporting, zend_av_globals, av_globals)
 
-	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "2", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "2", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "2", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
+	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "1", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -166,9 +166,9 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 {
 	av_globals->optimize_output = TRUE;
 	av_globals->verbose_reporting = FALSE;
-	av_globals->max_threads_per_stream = 2;
-	av_globals->threads_per_video_stream = 2;
-	av_globals->threads_per_audio_stream = 2;
+	av_globals->max_threads_per_stream = 1;
+	av_globals->threads_per_video_stream = 1;
+	av_globals->threads_per_audio_stream = 1;
 }
 /* }}} */
 
@@ -213,7 +213,7 @@ static void av_free_file(av_file *file) {
 					if(strm->flags & AV_STREAM_FRAME_BUFFER_ALLOCATED) {
 						avpicture_free((AVPicture *) strm->frame);
 					} else if(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED) {
-						av_free(strm->frame->extended_data[0]);
+						efree(strm->frame->extended_data[0]);
 						strm->frame->extended_data[0] = NULL;
 					}
 					avcodec_free_frame(&strm->frame);
@@ -237,7 +237,7 @@ static void av_free_file(av_file *file) {
 #else
 					audio_resample_close(strm->resampler_cxt);
 					if(strm->deplanarized_samples) {
-						av_free(strm->deplanarized_samples);
+						efree(strm->deplanarized_samples);
 					}
 #endif
 				}
@@ -253,7 +253,7 @@ static void av_free_file(av_file *file) {
 					efree(strm->packet_queue);
 				}
 				if(strm->samples) {
-					av_free(strm->samples);
+					efree(strm->samples);
 				}
 				efree(strm);
 			}
@@ -1619,7 +1619,7 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 			uint32_t deplanar_buffer_size;
 			codec_format = strm->codec_cxt->sample_fmt - AV_SAMPLE_FMT_U8P;
 			deplanar_buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, codec_format, 1);
-			strm->deplanarized_samples = av_malloc(deplanar_buffer_size);
+			strm->deplanarized_samples = emalloc(deplanar_buffer_size + FF_INPUT_BUFFER_PADDING_SIZE);
 		} else {
 			codec_format = strm->codec_cxt->sample_fmt;
 		}
@@ -1631,7 +1631,7 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 		}
 #endif
 		strm->sample_buffer_size = (uint32_t) (frame_duration * 44100);
-		strm->samples = av_malloc(sizeof(float) * strm->sample_buffer_size * 2);
+		strm->samples = emalloc(sizeof(float) * strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE);
 	}
 }
 
@@ -1695,7 +1695,7 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 	// allocate the audio frame if it's not there
 	if(!(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED)) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
-	    float *samples = av_malloc(buffer_size);
+	    float *samples = emalloc(buffer_size + FF_INPUT_BUFFER_PADDING_SIZE);
 
 	    strm->frame->format = strm->codec_cxt->sample_fmt;
 	    strm->frame->nb_samples = strm->codec_cxt->frame_size;
