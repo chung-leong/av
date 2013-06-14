@@ -154,9 +154,9 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("av.optimize_output", "1", PHP_INI_ALL, OnUpdateBool, optimize_output, zend_av_globals, av_globals)
     STD_PHP_INI_ENTRY("av.verbose_reporting", "0", PHP_INI_ALL, OnUpdateBool, verbose_reporting, zend_av_globals, av_globals)
 
-	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "1", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
-    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "1", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
+	STD_PHP_INI_ENTRY("av.max_threads_per_stream", "2", PHP_INI_SYSTEM, OnUpdateLong, max_threads_per_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_video_stream", "2", PHP_INI_ALL, OnUpdateLong, threads_per_video_stream, zend_av_globals, av_globals)
+    STD_PHP_INI_ENTRY("av.threads_per_audio_stream", "2", PHP_INI_ALL, OnUpdateLong, threads_per_audio_stream, zend_av_globals, av_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -166,9 +166,9 @@ static void php_av_init_globals(zend_av_globals *av_globals)
 {
 	av_globals->optimize_output = TRUE;
 	av_globals->verbose_reporting = FALSE;
-	av_globals->max_threads_per_stream = 1;
-	av_globals->threads_per_video_stream = 1;
-	av_globals->threads_per_audio_stream = 1;
+	av_globals->max_threads_per_stream = 2;
+	av_globals->threads_per_video_stream = 2;
+	av_globals->threads_per_audio_stream = 2;
 }
 /* }}} */
 
