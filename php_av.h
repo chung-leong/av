@@ -26,6 +26,20 @@
 #define AV_MAJOR_VERSION						1
 #define AV_MINOR_VERSION						1
 
+#ifndef Z_ADDREF_P
+	#define Z_ADDREF_P(zv)						zv->refcount++
+#endif
+
+#ifndef EXPECTED
+	#if (defined (__GNUC__) && __GNUC__ > 2 ) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX)
+		#define EXPECTED(condition)   __builtin_expect(condition, 1)
+		#define UNEXPECTED(condition) __builtin_expect(condition, 0)
+	#else
+		#define EXPECTED(condition)   (condition)
+		#define UNEXPECTED(condition) (condition)
+	#endif
+#endif
+
 extern zend_module_entry av_module_entry;
 #define phpext_av_ptr &av_module_entry
 

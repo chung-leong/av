@@ -117,7 +117,11 @@ const zend_function_entry av_functions[] = {
 	PHP_FE(av_stream_write_image,		arginfo_av_stream_write_image)
 	PHP_FE(av_stream_write_pcm,			arginfo_av_stream_write_pcm)
 
+#ifdef PHP_FE_END
 	PHP_FE_END	/* Must be the last line in av_functions[] */
+#else
+	{NULL, NULL, NULL}
+#endif
 };
 /* }}} */
 /* {{{ av_module_entry
