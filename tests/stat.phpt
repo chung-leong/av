@@ -10,7 +10,6 @@ av_file_close($file_in);
 
 extract($info);
 echo "$format\n";
-echo "$bit_rate\n";
 foreach($metadata as $name => $field) {
 	echo "$name: $field\n";
 }
@@ -29,7 +28,6 @@ foreach($streams as $key => $stream) {
 ?>
 --EXPECT--
 mov
-2681791
 major_brand: qt  
 minor_version: 537199360
 compatible_brands: qt  
