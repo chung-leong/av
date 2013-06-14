@@ -4,28 +4,30 @@
 ARG_WITH("av", "for av support", "no");
 
 if (PHP_AV != "no") {
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ ');
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\ ');
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libavcodec\\ ');
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libavformat\\ ');
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libavutil\\ ');
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libswscale\\ ');
-	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libswresample\\ ');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libavcodec\\');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libavformat\\');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libavutil\\');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libswscale\\');
+	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libswresample\\');
 	
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_SWSRESAMPLE=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_ENCODE_VIDEO2=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_DEFAULT_GET_BUFFER2=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_AV_CODEC_IS_ENCODER=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_FILL_AUDIO_FRAME=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_FFURL_READ_COMPLETE=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_FFURL_WRITE=1 ');
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_FFURL_SEEK=1 ');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_SWSRESAMPLE=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_ENCODE_AUDIO2=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_ENCODE_VIDEO2=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_DEFAULT_GET_BUFFER2=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_FREE_FRAME=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_AV_CODEC_IS_ENCODER=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_FILL_AUDIO_FRAME=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_FFURL_READ_COMPLETE=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_FFURL_WRITE=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_FFURL_SEEK=1');
 
-	ADD_FLAG("LIBS_AV", "ext\\av\\win32\\ffmpeg\\lib\\avcodec.lib ");
-	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avformat.lib ');
-	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avutil.lib ');
-	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swscale.lib ');
-	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swresample.lib ');
+	ADD_FLAG("LIBS_AV", "ext\\av\\win32\\ffmpeg\\lib\\avcodec.lib");
+	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avformat.lib');
+	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avutil.lib');
+	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swscale.lib');
+	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swresample.lib');
 	
 	EXTENSION("av", "av.c faststart.c");
 }
