@@ -23,7 +23,7 @@
 
 #define MAKE_STRING(x)							#x
 #define STRING(x)								MAKE_STRING(x)
-#define AV_MAJOR_VERSION						0
+#define AV_MAJOR_VERSION						1
 #define AV_MINOR_VERSION						1
 
 extern zend_module_entry av_module_entry;
