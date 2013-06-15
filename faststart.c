@@ -271,7 +271,7 @@ error_out:
 // these functions are not public in libav for some reason
 #if !defined(HAVE_FFURL_READ_COMPLETE) || !defined(HAVE_FFURL_WRITE) || !defined(HAVE_FFURL_SEEK)
 #if LIBAVFORMAT_VERSION_MAJOR > 53
-typedef struct URLContext {
+struct URLContext {
     const AVClass *av_class;    /**< information for av_log(). Set by url_open(). */
     struct URLProtocol *prot;
     void *priv_data;
@@ -281,7 +281,7 @@ typedef struct URLContext {
     int is_streamed;            /**< true if streamed (no seek possible), default = false */
     int is_connected;
     AVIOInterruptCB interrupt_callback;
-} URLContext;
+};
 
 typedef struct URLProtocol {
     const char *name;
