@@ -26,7 +26,6 @@ class PhpAv < Formula
     ENV['PHP_AUTOHEADER'] = '/usr/local/bin/autoheader'
     system "phpize"
     system "./configure"
-    system "make"
     system "sudo", "make", "install"
     system "cp", "av.ini", "#{prefix}/av.ini"
   end
