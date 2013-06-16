@@ -3,7 +3,7 @@ require 'formula'
 class PhpAv < Formula
   homepage 'http://www.php-qb.net/'
   url 'https://php-qb.googlecode.com/files/av-1.1-source-code.tar.bz2'
-  sha1 '06ddef3a26cf101ad848bbc374a28a0d9625875c'
+  sha1 'e0445a1d2f8213bc90e70979e4372dce854d696d'
 
   depends_on 'autoconf' => :build
   depends_on 'ffmpeg' => %w{
