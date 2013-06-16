@@ -27,7 +27,7 @@ class PhpAv < Formula
     system "phpize"
     system "./configure"
     system "make"
-    system "cp", "modules/qb.so", "#{prefix}/qb.so"
+    system "cp", "modules/av.so", "#{prefix}/av.so"
     system "cp", "av.ini", "#{prefix}/av.ini"
   end
 
