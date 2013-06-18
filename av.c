@@ -572,6 +572,7 @@ PHP_FUNCTION(av_file_open)
 	AVInputFormat *input_format = NULL;
 	AVOutputFormat *output_format = NULL;
 	AVFormatContext *format_cxt = NULL;
+	char *new_filename = NULL;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss|a", &filename, &filename_len, &mode, &mode_len, &z_options) == FAILURE) {
 		return;
@@ -585,6 +586,13 @@ PHP_FUNCTION(av_file_open)
 		} else if(*code == 'w') {
 			flags = AV_FILE_WRITE;
 		}
+	}
+
+	if(strncmp(filename, "mms://", 6) == 0) {
+		new_filename = emalloc(filename_len + 2);
+		memcpy(new_filename, "mmsh://", 7);
+		memcpy(new_filename + 7, filename + 6, filename_len - 6 + 1);
+		filename = new_filename;
 	}
 
 	if(flags & AV_FILE_READ) {
@@ -640,6 +648,10 @@ PHP_FUNCTION(av_file_open)
 
 		// copy metadata
 		av_copy_metadata(&format_cxt->metadata, z_options TSRMLS_CC);
+	}
+
+	if(new_filename) {
+		efree(new_filename);
 	}
 
 	file = emalloc(sizeof(av_file));
@@ -877,6 +889,7 @@ PHP_FUNCTION(av_file_stat)
 	uint32_t i;
 	AVDictionaryEntry *e;
 	const char *format, *format_name;
+	double overall_duration;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &z_file) == FAILURE) {
 		return;
@@ -890,10 +903,15 @@ PHP_FUNCTION(av_file_stat)
 
 	format = (f->iformat) ? f->iformat->name : f->oformat->name;
 	format_name = (f->iformat) ? f->iformat->long_name : f->oformat->long_name;
+	if(f->duration != AV_NOPTS_VALUE) {
+		overall_duration = (double) f->duration / AV_TIME_BASE;
+	} else {
+		overall_duration = INFINITY;
+	}
 	ADD_STRINGL(return_value, "format", format, av_get_name_length(format));
 	ADD_STRING(return_value, "format_name", format_name);
 	ADD_LONG(return_value, "bit_rate", f->bit_rate);
-	ADD_DOUBLE(return_value, "duration", (double) f->duration / AV_TIME_BASE);
+	ADD_DOUBLE(return_value, "duration", overall_duration);
 
 	// add metadata of file
 	MAKE_STD_ZVAL(metadata);
@@ -912,7 +930,7 @@ PHP_FUNCTION(av_file_stat)
 		AVCodecContext *c = s->codec;
 		AVCodec *d = avcodec_find_decoder(c->codec_id);
 		const char *stream_type, *codec, *codec_name;
-		double frame_rate = 0, duration = 0;
+		double frame_rate = 0, duration;
 
 		MAKE_STD_ZVAL(stream);
 		array_init(stream);
@@ -942,7 +960,7 @@ PHP_FUNCTION(av_file_stat)
 			duration = (double) s->nb_frames * av_q2d(s->time_base);
 		} else {
 			// use the overall duration
-			duration = (double) f->duration / AV_TIME_BASE;
+			duration = overall_duration;
 		}
 
 		ADD_STRING(stream, "type", stream_type);
