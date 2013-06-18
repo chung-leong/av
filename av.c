@@ -912,6 +912,7 @@ PHP_FUNCTION(av_file_stat)
 		AVCodecContext *c = s->codec;
 		AVCodec *d = avcodec_find_decoder(c->codec_id);
 		const char *stream_type, *codec, *codec_name;
+		double frame_rate = 0, duration = 0;
 
 		MAKE_STD_ZVAL(stream);
 		array_init(stream);
@@ -927,13 +928,29 @@ PHP_FUNCTION(av_file_stat)
 	    }
 		codec = (d) ? d->name : "unknown";
 		codec_name = (d) ? d->long_name : "unknown";
+		if(c->codec_type == AVMEDIA_TYPE_VIDEO) {
+			if(s->avg_frame_rate.den != 0) {
+				frame_rate = av_q2d(s->avg_frame_rate);
+			} else if(s->r_frame_rate.den != 0) {
+				frame_rate = av_q2d(s->r_frame_rate);
+			}
+		}
+		if(s->duration != AV_NOPTS_VALUE) {
+			duration = (double) s->duration * av_q2d(s->time_base);
+		} else if(s->nb_frames != 0) {
+			// not sure why duration isn't set if it could be calculated this way
+			duration = (double) s->nb_frames * av_q2d(s->time_base);
+		} else {
+			// use the overall duration
+			duration = (double) f->duration / AV_TIME_BASE;
+		}
 
 		ADD_STRING(stream, "type", stream_type);
 		ADD_STRINGL(stream, "codec", codec, av_get_name_length(codec));
 		ADD_STRING(stream, "codec_name", codec_name);
 		ADD_LONG(stream, "bit_rate", c->bit_rate);
-		ADD_DOUBLE(stream, "duration", (double) s->duration * av_q2d(s->time_base));
-		ADD_DOUBLE(stream, "frame_rate", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? av_q2d(s->avg_frame_rate) : 0);
+		ADD_DOUBLE(stream, "duration", duration);
+		ADD_DOUBLE(stream, "frame_rate", frame_rate);
 
 		ADD_LONG(stream, "height", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->height : 0);
 		ADD_LONG(stream, "width", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->width : 0);
