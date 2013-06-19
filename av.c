@@ -84,6 +84,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_read_pcm, 0, 0, 2)
     ZEND_ARG_INFO(1, time)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_read_subtitle, 0, 0, 2)
+    ZEND_ARG_INFO(0, stream)
+    ZEND_ARG_INFO(1, buffer)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_write_image, 0, 0, 2)
     ZEND_ARG_INFO(0, stream)
     ZEND_ARG_INFO(0, image)
@@ -114,6 +119,7 @@ const zend_function_entry av_functions[] = {
 	PHP_FE(av_stream_close,				arginfo_av_stream_close)
 	PHP_FE(av_stream_read_image,		arginfo_av_stream_read_image)
 	PHP_FE(av_stream_read_pcm,			arginfo_av_stream_read_pcm)
+	PHP_FE(av_stream_read_subtitle,		arginfo_av_stream_read_subtitle)
 	PHP_FE(av_stream_write_image,		arginfo_av_stream_write_image)
 	PHP_FE(av_stream_write_pcm,			arginfo_av_stream_write_pcm)
 
@@ -973,6 +979,9 @@ PHP_FUNCTION(av_file_stat)
 		ADD_LONG(stream, "height", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->height : 0);
 		ADD_LONG(stream, "width", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->width : 0);
 
+		if(c->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+		}
+
 		// add metadata of stream
 		MAKE_STD_ZVAL(metadata);
 		array_init(metadata);
@@ -1098,6 +1107,7 @@ PHP_FUNCTION(av_stream_open)
 	AVCodecContext *codec_cxt = NULL;
 	AVStream *stream = NULL;
 	AVFrame *frame = NULL;
+	AVSubtitle *subtitle = NULL;
 	av_file *file;
 	av_stream *strm;
 	int32_t stream_index;
@@ -1214,7 +1224,7 @@ PHP_FUNCTION(av_stream_open)
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Unable to open codec '%s'", codec_cxt->codec->name);
 			return;
 		}
-		frame = avcodec_alloc_frame();
+		
 		if (codec_cxt->codec->capabilities & CODEC_CAP_TRUNCATED) {
 			codec_cxt->flags |= CODEC_FLAG_TRUNCATED;
 		}
@@ -1327,9 +1337,6 @@ PHP_FUNCTION(av_stream_open)
 
 		// copy metadata
 		av_copy_metadata(&stream->metadata, z_options TSRMLS_CC);
-
-		frame = avcodec_alloc_frame();
-		frame->pts = 0;
 	}
 
 	strm = emalloc(sizeof(av_stream));
@@ -1341,10 +1348,23 @@ PHP_FUNCTION(av_stream_open)
 	strm->packet_queue = emalloc(sizeof(AVPacket) * strm->packet_queue_size);
 	memset(strm->packet_queue, 0, sizeof(AVPacket) * strm->packet_queue_size);
 	strm->file = file;
-	strm->frame = frame;
 	strm->index = stream_index;
 	strm->frame_duration = frame_duration;
 	codec_cxt->opaque = strm;
+
+	switch(media_type) {
+		case AVMEDIA_TYPE_VIDEO:
+		case AVMEDIA_TYPE_AUDIO:
+			strm->frame = avcodec_alloc_frame();
+			strm->frame->pts = 0;
+			break;
+		case AVMEDIA_TYPE_SUBTITLE:
+			strm->subtitle = av_malloc(sizeof(AVSubtitle));
+			memset(strm->subtitle, 0, sizeof(AVSubtitle));
+			break;
+		default:
+			break;
+	}
 
 	if((uint32_t) stream_index >= file->stream_count) {
 		file->stream_count = stream_index + 1;
@@ -1973,8 +1993,6 @@ static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, doubl
 				case AVMEDIA_TYPE_AUDIO:
 					bytes_decoded = avcodec_decode_audio4(strm->codec_cxt, dest_frame, &frame_finished, strm->packet);
 					break;
-				case AVMEDIA_TYPE_SUBTITLE:
-					break;
 				default:
 					bytes_decoded = -1;
 			}
@@ -1999,6 +2017,32 @@ static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, doubl
 					time_stamp = strm->frame_pts;
 				}
 			}
+			*p_time = time_stamp * av_q2d(strm->stream->time_base);
+			break;
+		}
+	}
+	if(!strm->packet_bytes_remaining) {
+		av_shift_packet(strm);
+	}
+	return TRUE;
+}
+
+static int av_decode_subtitle_at_cursor(av_stream *strm, AVSubtitle *dest_subtitle, double *p_time TSRMLS_DC) {
+	int frame_finished = FALSE;
+	for(;;) {
+		int bytes_decoded;
+		if(av_read_next_packet(strm TSRMLS_CC)) {
+			bytes_decoded = avcodec_decode_subtitle2(strm->codec_cxt, dest_subtitle, &frame_finished, strm->packet);
+		} else {
+			return FALSE;
+		}
+		if(bytes_decoded < 0) {
+			return FALSE;
+		}
+		strm->packet_bytes_remaining -= bytes_decoded;
+
+		if(frame_finished) {
+			int64_t time_stamp = dest_subtitle->pts;
 			*p_time = time_stamp * av_q2d(strm->stream->time_base);
 			break;
 		}
@@ -2056,6 +2100,60 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 		    strm->next_frame_time = 0;
 		} else {
 			return av_decode_frame_at_cursor(strm, strm->frame, p_time TSRMLS_CC);
+		}
+	}
+	return TRUE;
+}
+
+static int av_decode_next_subtitle(av_stream *strm TSRMLS_DC) {
+	if(strm->flags & AV_STREAM_SOUGHT) {
+		// keep decoding frames until we have two frames straddling the time sought
+		AVSubtitle *current_subtitle = strm->subtitle, *next_subtitle = NULL;
+		double current_subtitle_time, next_subtitle_time = 0;
+		do {
+			if(next_subtitle) {
+				// the one read earlier become the current frame
+				AVSubtitle *current_subtitle_temp = current_subtitle;
+				current_subtitle_time = next_subtitle_time;
+				current_subtitle = next_subtitle;
+				next_subtitle = current_subtitle_temp;
+			} else {
+				// decode the current frame
+				if(!av_decode_subtitle_at_cursor(strm, current_subtitle, &current_subtitle_time TSRMLS_CC)) {
+					return FALSE;
+				}
+				if(current_subtitle_time == strm->time_sought) {
+					// we have an exact match--no need to do more
+					break;
+				}
+				next_subtitle = av_malloc(sizeof(AVSubtitle));
+				memset(next_subtitle, 0, sizeof(next_subtitle));
+			}
+			// read the next frame so we can check if the current frame is the closest
+			// to the time sought without going over
+			if(!av_decode_subtitle_at_cursor(strm, next_subtitle, &next_subtitle_time TSRMLS_CC)) {
+				avsubtitle_free(next_subtitle);
+				av_free(next_subtitle);
+			    next_subtitle = NULL;
+				break;
+			}
+		} while(!(current_subtitle_time <= strm->time_sought && strm->time_sought < next_subtitle_time));
+
+		strm->flags &= ~AV_STREAM_SOUGHT;
+		strm->subtitle = current_subtitle;
+		strm->next_subtitle = next_subtitle;
+		strm->next_subtitle_time = next_subtitle_time;
+	} else {
+		if(strm->next_subtitle) {
+			// free the current frame and use the next frame
+			avsubtitle_free(strm->subtitle);
+
+		    strm->subtitle = strm->next_subtitle;
+		    strm->next_subtitle = NULL;
+		    strm->next_subtitle_time = 0;
+		} else {
+			double time;
+			return av_decode_subtitle_at_cursor(strm, strm->subtitle, &time TSRMLS_CC);
 		}
 	}
 	return TRUE;
@@ -2188,6 +2286,63 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 	}
 }
 
+zval *av_create_gd_image(uint32_t width, uint32_t height TSRMLS_DC) {
+	gdImagePtr image = NULL;
+	zval *z_width, *z_height, *z_function_name, *z_retval = NULL;
+	zval **params[2];
+
+	ALLOC_INIT_ZVAL(z_width);
+	ALLOC_INIT_ZVAL(z_height);
+	ALLOC_INIT_ZVAL(z_function_name);
+	ZVAL_LONG(z_width, width);
+	ZVAL_LONG(z_height, height);
+	ZVAL_STRING(z_function_name, "imagecreatetruecolor", TRUE);
+	params[0] = &z_width;
+	params[1] = &z_height;
+	call_user_function_ex(CG(function_table), NULL, z_function_name, &z_retval, 2, params, TRUE, NULL TSRMLS_CC);
+	zval_ptr_dtor(&z_width);
+	zval_ptr_dtor(&z_height);
+	zval_ptr_dtor(&z_function_name);
+	return z_retval;
+}
+
+static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer TSRMLS_DC) {
+	zval_dtor(buffer);
+
+	if(av_decode_next_subtitle(strm TSRMLS_CC)) {
+		uint32_t i;
+		array_init(buffer);
+		for(i = 0; i < strm->subtitle->num_rects; i++) {
+			AVSubtitleRect *rect = strm->subtitle->rects[i];
+			zval *z_rect, *z_image;
+			ALLOC_INIT_ZVAL(z_rect);
+			array_init(z_rect);
+
+			ADD_LONG(z_rect, "x", rect->x);
+			ADD_LONG(z_rect, "y", rect->y);
+			ADD_LONG(z_rect, "width", rect->w);
+			ADD_LONG(z_rect, "height", rect->h);
+
+			switch(rect->type) {
+				case SUBTITLE_BITMAP: {
+					z_image = av_create_gd_image(rect->w, rect->h TSRMLS_CC);
+					if(z_image) {
+						zend_hash_update(Z_ARRVAL_P(z_rect), "image", strlen("image") + 1, (void *) &z_image, sizeof(zval *), NULL);
+					}
+				}	break;
+				case SUBTITLE_TEXT: {
+					ADD_STRING(z_rect, "text", rect->text);
+				}	break;
+			}
+			zend_hash_next_index_insert(Z_ARRVAL_P(buffer), &z_rect, sizeof(zval *), NULL);
+		}
+		return TRUE;
+	} else {
+		Z_TYPE_P(buffer) = IS_NULL;
+		return FALSE;
+	}
+}
+
 /* {{{ proto bool av_stream_write_image()
    Write an image */
 PHP_FUNCTION(av_stream_write_image)
@@ -2301,6 +2456,32 @@ PHP_FUNCTION(av_stream_read_pcm)
 			zval_dtor(z_time);
 			ZVAL_DOUBLE(z_time, time);
 		}
+		RETURN_TRUE;
+	} else {
+		RETVAL_FALSE;
+	}
+}
+/* }}} */
+
+/* {{{ proto string av_stream_read_subtitle()
+   Read an image */
+PHP_FUNCTION(av_stream_read_subtitle)
+{
+	zval *z_strm, *z_subtitle;
+	av_stream *strm;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "rz|z", &z_strm, &z_subtitle) == FAILURE) {
+		return;
+	}
+	ZEND_FETCH_RESOURCE(strm, av_stream *, &z_strm, -1, "av stream", le_av_strm);
+
+	av_set_log_level(TSRMLS_C);
+
+	if(strm->codec->type != AVMEDIA_TYPE_SUBTITLE) {
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a subtitle stream");
+		return;
+	}
+	if(av_decode_subtitle_to_zval(strm, z_subtitle TSRMLS_CC)) {
 		RETURN_TRUE;
 	} else {
 		RETVAL_FALSE;

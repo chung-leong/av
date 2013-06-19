@@ -108,6 +108,10 @@ struct av_stream {
 	ReSampleContext *resampler_cxt;		// resampler context
 #endif
 
+	AVSubtitle *subtitle;
+	AVSubtitle *next_subtitle;
+	double next_subtitle_time;
+
 	AVPacket *packet;					// the current packet
 	AVPacket **packet_queue;			// packets for this stream waiting to be decoded or written to disk
 	uint32_t packet_queue_size;			// length of the queue
@@ -170,6 +174,7 @@ PHP_FUNCTION(av_stream_open);
 PHP_FUNCTION(av_stream_close);
 PHP_FUNCTION(av_stream_read_image);
 PHP_FUNCTION(av_stream_read_pcm);
+PHP_FUNCTION(av_stream_read_subtitle);
 PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_get_duration);
