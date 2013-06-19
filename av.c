@@ -1941,6 +1941,25 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 	}
 }
 
+static void av_copy_subtitle_to_gd(AVPicture *picture, gdImagePtr image) {
+	int *gd_pixel;
+	uint8_t *av_pixel;
+	uint32_t i, j;
+	for(i = 0; i < (uint32_t) image->sy; i++) {
+		gd_pixel = image->tpixels[i];
+		av_pixel = picture->data[0] + picture->linesize[0] * i;
+		for(j = 0; j < (uint32_t) image->sx; j++) {
+			int r = av_pixel[0] << 6;
+			int g = av_pixel[0] << 6;
+			int b = av_pixel[0] << 6;
+			int a = gdAlphaMax;
+			*gd_pixel = gdTrueColorAlpha(r, g, b, a);
+			gd_pixel += 1;
+			av_pixel += 1;
+		}
+	}
+}
+
 static int av_encode_next_frame(av_stream *strm, double time) {
 	av_file *file = strm->file;
 	int packet_finished = FALSE;
@@ -2318,6 +2337,8 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer TSRMLS_DC) {
 			ALLOC_INIT_ZVAL(z_rect);
 			array_init(z_rect);
 
+			ADD_DOUBLE(z_rect, "start", (double) strm->subtitle->start_display_time / 1000);
+			ADD_DOUBLE(z_rect, "end", (double) strm->subtitle->end_display_time / 1000);
 			ADD_LONG(z_rect, "x", rect->x);
 			ADD_LONG(z_rect, "y", rect->y);
 			ADD_LONG(z_rect, "width", rect->w);
@@ -2327,6 +2348,9 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer TSRMLS_DC) {
 				case SUBTITLE_BITMAP: {
 					z_image = av_create_gd_image(rect->w, rect->h TSRMLS_CC);
 					if(z_image) {
+						gdImage *image;
+						ZEND_FETCH_RESOURCE_NO_RETURN(image, gdImagePtr, &z_image, -1, "image", le_gd);
+						av_copy_subtitle_to_gd(&rect->pict, image);
 						zend_hash_update(Z_ARRVAL_P(z_rect), "image", strlen("image") + 1, (void *) &z_image, sizeof(zval *), NULL);
 					}
 				}	break;
