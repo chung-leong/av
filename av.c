@@ -1944,15 +1944,18 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 static void av_copy_subtitle_to_gd(AVPicture *picture, gdImagePtr image) {
 	int *gd_pixel;
 	uint8_t *av_pixel;
+	uint32_t *av_palette = (uint32_t *) picture->data[1];
 	uint32_t i, j;
 	for(i = 0; i < (uint32_t) image->sy; i++) {
 		gd_pixel = image->tpixels[i];
 		av_pixel = picture->data[0] + picture->linesize[0] * i;
 		for(j = 0; j < (uint32_t) image->sx; j++) {
-			int r = av_pixel[0] << 6;
-			int g = av_pixel[0] << 6;
-			int b = av_pixel[0] << 6;
-			int a = gdAlphaMax;
+			int v = av_pixel[0];
+			int color = av_palette[v];
+			int r = (color >> 16) & 0xFF;
+			int g = (color >> 8) & 0xFF;
+			int b = (color >> 0) & 0xFF;
+			int a = gdAlphaMax - ((color >> 25) & 0xFF);
 			*gd_pixel = gdTrueColorAlpha(r, g, b, a);
 			gd_pixel += 1;
 			av_pixel += 1;
