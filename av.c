@@ -1941,26 +1941,44 @@ static void av_copy_image_to_gd(AVFrame *picture, gdImagePtr image) {
 	}
 }
 
-static void av_copy_subtitle_to_gd(AVPicture *picture, gdImagePtr image) {
-	int *gd_pixel;
+#pragma pack(1)
+struct rgba {
+	char r;
+	char g;
+	char b;
+	char a;
+};
+#pragma pack(pop);
+
+static void av_copy_subtitle_to_gd(AVPicture *picture, uint32_t color_count, gdImagePtr image) {
+	uint8_t *gd_pixel;
 	uint8_t *av_pixel;
-	uint32_t *av_palette = (uint32_t *) picture->data[1];
-	uint32_t i, j;
+	struct rgba *av_palette = (uint32_t *) picture->data[1];
+	uint32_t i;
+
+	// copy pixels
 	for(i = 0; i < (uint32_t) image->sy; i++) {
-		gd_pixel = image->tpixels[i];
+		gd_pixel = image->pixels[i];
 		av_pixel = picture->data[0] + picture->linesize[0] * i;
-		for(j = 0; j < (uint32_t) image->sx; j++) {
-			int v = av_pixel[0];
-			int color = av_palette[v];
-			int r = (color >> 16) & 0xFF;
-			int g = (color >> 8) & 0xFF;
-			int b = (color >> 0) & 0xFF;
-			int a = gdAlphaMax - ((color >> 25) & 0xFF);
-			*gd_pixel = gdTrueColorAlpha(r, g, b, a);
-			gd_pixel += 1;
-			av_pixel += 1;
+		memcpy(gd_pixel, av_pixel, image->sx);
+	}
+
+	// copy palette
+	if(color_count > gdMaxColors) {
+		color_count = gdMaxColors;
+	}
+	for(i = 0; i < color_count; i++) {
+		image->open[i] = FALSE;
+		image->red[i] = av_palette[i].r;
+		image->green[i] = av_palette[i].g;
+		image->blue[i] = av_palette[i].b;
+		image->alpha[i] = gdAlphaTransparent - (av_palette[i].a >> 1);
+		if(av_palette[i].a == 0 && image->transparent == -1) {
+			image->transparent = i;
 		}
 	}
+	image->colorsTotal = color_count;
+	image->saveAlphaFlag = TRUE;
 }
 
 static int av_encode_next_frame(av_stream *strm, double time) {
@@ -2318,7 +2336,7 @@ zval *av_create_gd_image(uint32_t width, uint32_t height TSRMLS_DC) {
 	ALLOC_INIT_ZVAL(z_function_name);
 	ZVAL_LONG(z_width, width);
 	ZVAL_LONG(z_height, height);
-	ZVAL_STRING(z_function_name, "imagecreatetruecolor", TRUE);
+	ZVAL_STRING(z_function_name, "imagecreate", TRUE);
 	params[0] = &z_width;
 	params[1] = &z_height;
 	call_user_function_ex(CG(function_table), NULL, z_function_name, &z_retval, 2, params, TRUE, NULL TSRMLS_CC);
@@ -2353,7 +2371,7 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer TSRMLS_DC) {
 					if(z_image) {
 						gdImage *image;
 						ZEND_FETCH_RESOURCE_NO_RETURN(image, gdImagePtr, &z_image, -1, "image", le_gd);
-						av_copy_subtitle_to_gd(&rect->pict, image);
+						av_copy_subtitle_to_gd(&rect->pict, rect->nb_colors, image);
 						zend_hash_update(Z_ARRVAL_P(z_rect), "image", strlen("image") + 1, (void *) &z_image, sizeof(zval *), NULL);
 					}
 				}	break;
