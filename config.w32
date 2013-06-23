@@ -29,6 +29,6 @@ if (PHP_AV != "no") {
 	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swscale.lib');
 	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swresample.lib');
 	
-	EXTENSION("av", "av.c faststart.c");
+	EXTENSION("av", "av.c av_utils.c faststart.c");
 }
 

@@ -157,6 +157,18 @@ struct av_file {
 
 int av_optimize_mov_file(AVIOContext *pb);
 
+int av_get_element_double(zval *array, const char *key, double *p_value);
+int av_get_element_long(zval *array, const char *key, long *p_value);
+int av_get_element_string(zval *array, const char *key, char **p_value);
+int av_get_element_stringl(zval *array, const char *key, char **p_value, uint32_t *p_len);
+int av_get_element_hash(zval *array, const char *key, HashTable **p_hash);
+int av_get_element_resource(zval *array, const char *key, zval **p_res);
+
+void av_set_element_long(zval *array, const char *key, long value);
+void av_set_element_double(zval *array, const char *key, double value);
+void av_set_element_string(zval *array, const char *key, const char *value);
+void av_set_element_stringl(zval *array, const char *key, const char *value, uint32_t value_length);
+
 PHP_MINIT_FUNCTION(av);
 PHP_MSHUTDOWN_FUNCTION(av);
 PHP_RINIT_FUNCTION(av);
@@ -179,8 +191,8 @@ PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_get_duration);
 
-ZEND_BEGIN_MODULE_GLOBALS(av)
-#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2)
+ZEND_BEGIN_MODULE_GLOBALS(av);
+#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)
 	uint8_t *encoding_buffer;
 	uint32_t encoding_buffer_size;
 #endif
@@ -190,7 +202,7 @@ ZEND_BEGIN_MODULE_GLOBALS(av)
 	long threads_per_audio_stream;
 	zend_bool optimize_output;
 	zend_bool verbose_reporting;
-ZEND_END_MODULE_GLOBALS(av)
+ZEND_END_MODULE_GLOBALS(av);
 
 #ifdef ZTS
 #define AV_G(v) TSRMG(av_globals_id, zend_av_globals *, v)

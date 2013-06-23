@@ -161,5 +161,5 @@ if test "$PHP_AV" != "no"; then
   
   PHP_SUBST(AV_SHARED_LIBADD)
 
-  PHP_NEW_EXTENSION(av, av.c faststart.c, $ext_shared)
+  PHP_NEW_EXTENSION(av, av.c av_utils.c faststart.c, $ext_shared)
 fi
