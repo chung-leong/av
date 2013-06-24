@@ -905,6 +905,9 @@ PHP_FUNCTION(av_file_stat)
 		av_set_element_long(stream, "width", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->width : 0);
 
 		if(c->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+			if(c->subtitle_header_size > 0) {
+				av_set_element_stringl(stream, "subtitle_header", c->subtitle_header, c->subtitle_header_size);
+			}
 		}
 
 		// add metadata of stream
@@ -1167,6 +1170,8 @@ PHP_FUNCTION(av_stream_open)
 		enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
 		char *codec_name = NULL;
 		char *pixel_format_name = NULL;
+		char *subtitle_header = NULL;
+		long subtitle_header_size;
 
 		if(av_get_element_string(z_options, "codec", &codec_name)) {
 			if(!av_find_codec(codec_name, &codec, NULL)) {
@@ -1252,6 +1257,11 @@ PHP_FUNCTION(av_stream_open)
 				codec_cxt->flags |= CODEC_FLAG_QSCALE;
 				break;
 			case AVMEDIA_TYPE_SUBTITLE:
+				if(av_get_element_stringl(z_options, "subtitle_header", &subtitle_header, &subtitle_header_size)) {
+					codec_cxt->subtitle_header = av_malloc(subtitle_header_size + 1);
+					memcpy(codec_cxt->subtitle_header, subtitle_header, subtitle_header_size + 1);
+					codec_cxt->subtitle_header_size = subtitle_header_size;
+				}
 				file->format_cxt->subtitle_codec_id = codec->id;
 				codec_cxt->time_base.num = 1;
 				codec_cxt->time_base.den = 90000;
@@ -1375,8 +1385,6 @@ static av_stream *av_get_writable_stream(av_file *file) {
 static int av_write_next_packet(av_stream *strm, AVPacket *packet) {
 	av_stream *pending_stream;
 	av_file *file = strm->file;
-
-
 
 	// rescale time values for container
 	if(packet->pts != AV_NOPTS_VALUE) {
@@ -2337,7 +2345,7 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 	Bucket *p;
 	double start_time, end_time;
 	long x, y, width, height;
-	zval *z_image;
+	zval *z_image = NULL;
 	gdImagePtr image = NULL;
 	char *text = NULL, *ass = NULL;
 	uint32_t len;
@@ -2428,7 +2436,7 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 			rect->type = SUBTITLE_TEXT;
 		} else if(av_get_element_stringl(*p_element, "ass", &ass, &len)) {
 			rect->ass = av_malloc(len + 1);
-			strcpy(rect->text, ass);
+			strcpy(rect->ass, ass);
 			rect->type = SUBTITLE_ASS;
 		}
 	}
@@ -2474,7 +2482,7 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer, double *p_t
 					av_set_element_string(z_rect, "text", rect->text);
 				}	break;
 				case SUBTITLE_ASS: {
-					av_set_element_string(z_rect, "ass", rect->text);
+					av_set_element_string(z_rect, "ass", rect->ass);
 				}	break;
 				default:
 					break;

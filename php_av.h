@@ -172,6 +172,8 @@ void av_set_element_double(zval *array, const char *key, double value);
 void av_set_element_string(zval *array, const char *key, const char *value);
 void av_set_element_stringl(zval *array, const char *key, const char *value, uint32_t value_length);
 
+zval *av_create_gd_image(uint32_t width, uint32_t height TSRMLS_DC);
+
 PHP_MINIT_FUNCTION(av);
 PHP_MSHUTDOWN_FUNCTION(av);
 PHP_RINIT_FUNCTION(av);
