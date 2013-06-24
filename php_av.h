@@ -131,6 +131,7 @@ enum {
 	AV_FILE_WRITE 						= 0x0002,
 	AV_FILE_APPEND						= 0x0004,
 
+	AV_FILE_HEADER_ERROR_ENCOUNTERED	= 0x0800,
 	AV_FILE_EOF_REACHED					= 0x1000,
 	AV_FILE_HEADER_WRITTEN				= 0x2000,
 	AV_FILE_LOCKED						= 0x4000,
@@ -189,7 +190,7 @@ PHP_FUNCTION(av_stream_read_pcm);
 PHP_FUNCTION(av_stream_read_subtitle);
 PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
-PHP_FUNCTION(av_stream_get_duration);
+PHP_FUNCTION(av_stream_write_subtitle);
 
 ZEND_BEGIN_MODULE_GLOBALS(av);
 #if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)

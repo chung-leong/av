@@ -39,7 +39,7 @@ int av_get_element_string(zval *array, const char *key, char **p_value) {
 			zval **p_data;
 			if(zend_hash_find(Z_ARRVAL_P(array), key, strlen(key) + 1, (void **) &p_data) == SUCCESS) {
 				convert_to_string(*p_data);
-				p_value = Z_STRVAL_PP(p_data);
+				*p_value = Z_STRVAL_PP(p_data);
 				return TRUE;
 			}
 		}
@@ -53,8 +53,8 @@ int av_get_element_stringl(zval *array, const char *key, char **p_value, uint32_
 			zval **p_data;
 			if(zend_hash_find(Z_ARRVAL_P(array), key, strlen(key) + 1, (void **) &p_data) == SUCCESS) {
 				convert_to_string(*p_data);
-				p_value = Z_STRVAL_PP(p_data);
-				p_len = Z_STRLEN_PP(p_data);
+				*p_value = Z_STRVAL_PP(p_data);
+				*p_len = Z_STRLEN_PP(p_data);
 				return TRUE;
 			}
 		}
@@ -68,7 +68,7 @@ int av_get_element_hash(zval *array, const char *key, HashTable **p_hash) {
 			zval **p_data;
 			if(zend_hash_find(Z_ARRVAL_P(array), key, strlen(key) + 1, (void **) &p_data) == SUCCESS) {
 				convert_to_array(*p_data);
-				p_hash = &Z_ARRVAL_PP(p_data);
+				*p_hash = Z_ARRVAL_PP(p_data);
 				return TRUE;
 			}
 		}
