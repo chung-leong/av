@@ -9,7 +9,7 @@ Video seek test
 
 $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
-$file_in = av_file_open("$folder/source-code.mkv", "rb");
+$file_in = av_file_open("$folder/source-code.mov", "rb");
 
 $a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");

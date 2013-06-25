@@ -4,7 +4,7 @@ Video file details test
 <?php
 
 $folder = dirname(__FILE__);
-$file_in = av_file_open("$folder/source-code.mkv", "r");
+$file_in = av_file_open("$folder/source-code.mov", "r");
 $info = av_file_stat($file_in);
 av_file_close($file_in);
 
@@ -13,48 +13,60 @@ echo "$format\n";
 foreach($metadata as $name => $field) {
 	echo "$name: $field\n";
 }
-foreach($streams as $id => $stream) {
-	if(is_int($id)) {
-		echo "STREAM #$id:\n";
-		foreach($stream as $key => $value) {
-			if(is_scalar($value) && $key != 'subtitle_header') {
-				echo "$key = $value\n";
-			}
-		}
-	}
+foreach($streams as $key => $stream) {
+	echo "stream $key\n";
+	extract($stream);
+	echo "$type\n";
+	echo "$codec\n";
+	echo "$bit_rate\n";
+	echo "$duration\n";
+	echo "$frame_rate\n";
+	echo "$height\n";
+	echo "$width\n";
 }
 
 ?>
 --EXPECT--
-matroska
+mov
+major_brand: qt  
+minor_version: 537199360
+compatible_brands: qt  
+creation_time: 2011-04-01 03:36:02
 title: "Source Code" Clip
-MAJOR_BRAND: qt  
-MINOR_VERSION: 537199360
-COMPATIBLE_BRANDS: qt  
-COPYRIGHT-eng: © 2011, Summit Entertainment, LLC.
-TITLE-eng: "Source Code" Clip
-ARTIST: Yahoo! Movies
-ARTIST-eng: Yahoo! Movies
-COPYRIGHT: © 2011, Summit Entertainment, LLC.
-ENCODER: Lavf55.3.100
-STREAM #0:
-type = video
-codec = h264
-codec_name = H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
-bit_rate = 0
-duration = 29.908
-frame_rate = 23.976
-height = 480
-width = 852
-STREAM #1:
-type = audio
-codec = aac
-codec_name = AAC (Advanced Audio Coding)
-bit_rate = 0
-duration = 29.908
-STREAM #2:
-type = subtitle
-codec = ass
-codec_name = SSA (SubStation Alpha) subtitle
-bit_rate = 0
-duration = 29.908
+title-eng: "Source Code" Clip
+artist: Yahoo! Movies
+artist-eng: Yahoo! Movies
+copyright: © 2011, Summit Entertainment, LLC.
+copyright-eng: © 2011, Summit Entertainment, LLC.
+stream 0
+audio
+aac
+142077
+29.866666666667
+0
+0
+0
+stream audio
+audio
+aac
+142077
+29.866666666667
+0
+0
+0
+stream 1
+video
+h264
+2533818
+29.863196529863
+23.976
+480
+852
+stream video
+video
+h264
+2533818
+29.863196529863
+23.976
+480
+852
