@@ -160,17 +160,19 @@ struct av_file {
 
 int av_optimize_mov_file(AVIOContext *pb);
 
-int av_get_element_double(zval *array, const char *key, double *p_value);
+int av_get_element_bool(zval *array, const char *key, int *p_value);
 int av_get_element_long(zval *array, const char *key, long *p_value);
+int av_get_element_double(zval *array, const char *key, double *p_value);
 int av_get_element_string(zval *array, const char *key, char **p_value);
-int av_get_element_stringl(zval *array, const char *key, char **p_value, uint32_t *p_len);
+int av_get_element_stringl(zval *array, const char *key, char **p_value, long *p_len);
 int av_get_element_hash(zval *array, const char *key, HashTable **p_hash);
 int av_get_element_resource(zval *array, const char *key, zval **p_res);
 
+void av_set_element_bool(zval *array, const char *key, int value);
 void av_set_element_long(zval *array, const char *key, long value);
 void av_set_element_double(zval *array, const char *key, double value);
 void av_set_element_string(zval *array, const char *key, const char *value);
-void av_set_element_stringl(zval *array, const char *key, const char *value, uint32_t value_length);
+void av_set_element_stringl(zval *array, const char *key, const char *value, long value_length);
 
 zval *av_create_gd_image(uint32_t width, uint32_t height TSRMLS_DC);
 
@@ -192,9 +194,11 @@ PHP_FUNCTION(av_stream_close);
 PHP_FUNCTION(av_stream_read_image);
 PHP_FUNCTION(av_stream_read_pcm);
 PHP_FUNCTION(av_stream_read_subtitle);
+PHP_FUNCTION(av_stream_read_packet);
 PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_write_subtitle);
+PHP_FUNCTION(av_stream_write_packet);
 
 ZEND_BEGIN_MODULE_GLOBALS(av);
 #if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)

@@ -5,13 +5,13 @@
 #include "php.h"
 #include "php_av.h"
 
-int av_get_element_double(zval *array, const char *key, double *p_value) {
+int av_get_element_bool(zval *array, const char *key, int *p_value) {
 	if(array) {
 		if(Z_TYPE_P(array) == IS_ARRAY) {
 			zval **p_data;
 			if(zend_hash_find(Z_ARRVAL_P(array), key, strlen(key) + 1, (void **) &p_data) == SUCCESS) {
-				convert_to_double(*p_data);
-				*p_value = Z_DVAL_PP(p_data);
+				convert_to_boolean(*p_data);
+				*p_value = Z_LVAL_PP(p_data) != 0;
 				return TRUE;
 			}
 		}
@@ -33,6 +33,20 @@ int av_get_element_long(zval *array, const char *key, long *p_value) {
 	return FALSE;
 }
 
+int av_get_element_double(zval *array, const char *key, double *p_value) {
+	if(array) {
+		if(Z_TYPE_P(array) == IS_ARRAY) {
+			zval **p_data;
+			if(zend_hash_find(Z_ARRVAL_P(array), key, strlen(key) + 1, (void **) &p_data) == SUCCESS) {
+				convert_to_double(*p_data);
+				*p_value = Z_DVAL_PP(p_data);
+				return TRUE;
+			}
+		}
+	}
+	return FALSE;
+}
+
 int av_get_element_string(zval *array, const char *key, char **p_value) {
 	if(array) {
 		if(Z_TYPE_P(array) == IS_ARRAY) {
@@ -47,7 +61,7 @@ int av_get_element_string(zval *array, const char *key, char **p_value) {
 	return FALSE;
 }
 
-int av_get_element_stringl(zval *array, const char *key, char **p_value, uint32_t *p_len) {
+int av_get_element_stringl(zval *array, const char *key, char **p_value, long *p_len) {
 	if(array) {
 		if(Z_TYPE_P(array) == IS_ARRAY) {
 			zval **p_data;
@@ -91,6 +105,13 @@ int av_get_element_resource(zval *array, const char *key, zval **p_res) {
 	return FALSE;
 }
 
+void av_set_element_bool(zval *array, const char *key, int value) {
+	zval *element;
+	MAKE_STD_ZVAL(element);
+	ZVAL_BOOL(element, value);
+	zend_hash_update(HASH_OF(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
+}
+
 void av_set_element_long(zval *array, const char *key, long value) {
 	zval *element;
 	MAKE_STD_ZVAL(element);
@@ -112,7 +133,7 @@ void av_set_element_string(zval *array, const char *key, const char *value) {
 	zend_hash_update(HASH_OF(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
 }
 
-void av_set_element_stringl(zval *array, const char *key, const char *value, uint32_t value_length) {
+void av_set_element_stringl(zval *array, const char *key, const char *value, long value_length) {
 	zval *element;
 	MAKE_STD_ZVAL(element);
 	ZVAL_STRINGL(element, (value) ? value : "", value_length, TRUE);

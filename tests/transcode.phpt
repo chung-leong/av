@@ -9,7 +9,7 @@ Transcode test
 
 $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
-$file_in = av_file_open("$folder/source-code.mov", "r");
+$file_in = av_file_open("$folder/source-code.mkv", "r");
 $stat_in = av_file_stat($file_in);
 $file_out1 = av_file_open("$folder/source-code.mp4", "w", array( "metadata" => $stat_in["metadata"] ));
 $file_out2 = av_file_open("$folder/source-code.webm", "w");
