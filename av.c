@@ -2267,7 +2267,7 @@ static int av_encode_packet_from_zval(av_stream *strm, zval *z_packet TSRMLS_DC)
 		return FALSE;
 	}
 	av_get_element_double(z_packet, "time_decode", &time_decode);
-	av_get_element_double(z_packet, "duration", &time_present);
+	av_get_element_double(z_packet, "duration", &duration);
 	av_get_element_bool(z_packet, "is_key", &is_key_frame);
 
 	av_write_file_header(strm->file);
@@ -2275,9 +2275,16 @@ static int av_encode_packet_from_zval(av_stream *strm, zval *z_packet TSRMLS_DC)
 	packet = emalloc(sizeof(AVPacket));
 	av_init_packet(packet);
 	packet->pts = (int64_t) (time_present / av_q2d(strm->stream->time_base));
-	packet->dts = !isnan(time_decode) ? (int64_t) (time_present / av_q2d(strm->stream->time_base)) : AV_NOPTS_VALUE;
-	packet->duration = !isnan(duration) ? (int64_t) (duration / av_q2d(strm->stream->time_base)) : 0;
+	if(isnan(time_decode)) {
+		packet->dts = (int64_t) (time_present / av_q2d(strm->stream->time_base));
+	} else {
+		packet->dts = packet->pts;
+	}
+	if(isnan(duration)) {
+		packet->duration = (int64_t) (duration / av_q2d(strm->stream->time_base));
+	}
 	packet->data = av_malloc(packet_size);
+
 	memcpy(packet->data, data, packet_size);
 	packet->size = packet_size;
 	if(is_key_frame) {
