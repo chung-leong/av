@@ -196,7 +196,7 @@ PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_write_subtitle);
 
-ZEND_BEGIN_MODULE_GLOBALS(av);
+ZEND_BEGIN_MODULE_GLOBALS(av)
 #if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)
 	uint8_t *encoding_buffer;
 	uint32_t encoding_buffer_size;
@@ -207,7 +207,7 @@ ZEND_BEGIN_MODULE_GLOBALS(av);
 	long threads_per_audio_stream;
 	zend_bool optimize_output;
 	zend_bool verbose_reporting;
-ZEND_END_MODULE_GLOBALS(av);
+ZEND_END_MODULE_GLOBALS(av)
 
 #ifdef ZTS
 #define AV_G(v) TSRMG(av_globals_id, zend_av_globals *, v)

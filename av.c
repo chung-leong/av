@@ -916,7 +916,7 @@ PHP_FUNCTION(av_file_stat)
 				av_set_element_long(stream, "width", c->width);
 			}	break;
 			case AVMEDIA_TYPE_AUDIO: {
-				av_set_element_long(stream, "channel_layout",  c->channel_layout);
+				av_set_element_long(stream, "channel_layout", (long) c->channel_layout);
 				av_set_element_long(stream, "channels", c->channels);
 				av_set_element_long(stream, "sample_rate", c->sample_rate);
 			}	break;
@@ -1530,10 +1530,11 @@ int avcodec_encode_subtitle2(AVCodecContext *avctx, AVPacket *avpkt, const AVSub
 	ret = avcodec_encode_subtitle(avctx, AV_G(encoding_buffer), AV_G(encoding_buffer_size), subtitle);
 
 	if(ret > 0) {
+		AVRational time_base = { 1, AV_TIME_BASE };
 		avpkt->size = ret;
 		avpkt->data = av_realloc(avpkt->data, avpkt->size + FF_INPUT_BUFFER_PADDING_SIZE);
 		avpkt->destruct = av_destruct_packet;
-		avpkt->pts = av_rescale_q(subtitle->pts, AV_TIME_BASE_Q, avctx->time_base);
+		avpkt->pts = av_rescale_q(subtitle->pts, time_base, avctx->time_base);
 		avpkt->flags |= AV_PKT_FLAG_KEY;
 		memcpy(avpkt->data, AV_G(encoding_buffer), ret);
 		*got_packet_ptr = TRUE;
@@ -2003,7 +2004,7 @@ static void av_copy_subtitle_from_gd(AVPicture *picture, int *p_color_count, gdI
 	// copy palette
 	picture->data[1] = av_realloc(picture->data[1], sizeof(struct rgba) * image->colorsTotal);
 	av_palette = (struct rgba *) picture->data[1];
-	for(i = 0; i < image->colorsTotal; i++) {
+	for(i = 0; i < (uint32_t) image->colorsTotal; i++) {
 		av_palette[i].r = image->red[i];
 		av_palette[i].g = image->green[i];
 		av_palette[i].b = image->blue[i];
@@ -2018,10 +2019,10 @@ static void av_copy_subtitle_from_gd(AVPicture *picture, int *p_color_count, gdI
 
 static int av_write_file_header(av_file *file) {
 	if(!(file->flags & AV_FILE_HEADER_WRITTEN)) {
-		uint32_t i;
 		av_stream *subtitle_strm = NULL;
 		if(avformat_write_header(file->format_cxt, NULL) < 0) {
 			if(!(file->flags & AV_FILE_HEADER_ERROR_ENCOUNTERED)) {
+				TSRMLS_FETCH();
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "error encountered writing file header");
 				file->flags |= AV_FILE_HEADER_ERROR_ENCOUNTERED;
 			}
@@ -2371,7 +2372,7 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 	gdImagePtr image = NULL;
 	char *text = NULL, *ass = NULL;
 	uint32_t len;
-	int i;
+	uint32_t i;
 
 	if(Z_TYPE_P(buffer) != IS_ARRAY) {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle data must be contained in an array");
@@ -2432,8 +2433,8 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 		}
 	}
 	strm->subtitle->num_rects = ht->nNumOfElements;
-	strm->subtitle->start_display_time = start_time * 1000;
-	strm->subtitle->end_display_time = end_time * 1000;
+	strm->subtitle->start_display_time = (uint32_t) (start_time * 1000);
+	strm->subtitle->end_display_time = (uint32_t) (end_time * 1000);
 
 	for(p = ht->pListHead, i = 0; p; p = p->pListNext, i++) {
 		zval **p_element = p->pData;

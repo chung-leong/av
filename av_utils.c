@@ -95,28 +95,28 @@ void av_set_element_long(zval *array, const char *key, long value) {
 	zval *element;
 	MAKE_STD_ZVAL(element);
 	ZVAL_LONG(element, value);
-	zend_hash_update(HASH_OF(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
+	zend_hash_update(Z_ARRVAL_P(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
 }
 
 void av_set_element_double(zval *array, const char *key, double value) {
 	zval *element;
 	MAKE_STD_ZVAL(element);
 	ZVAL_DOUBLE(element, value);
-	zend_hash_update(HASH_OF(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
+	zend_hash_update(Z_ARRVAL_P(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
 }
 
 void av_set_element_string(zval *array, const char *key, const char *value) {
 	zval *element;
 	MAKE_STD_ZVAL(element);
 	ZVAL_STRING(element, (value) ? value : "", TRUE);
-	zend_hash_update(HASH_OF(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
+	zend_hash_update(Z_ARRVAL_P(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
 }
 
 void av_set_element_stringl(zval *array, const char *key, const char *value, long value_length) {
 	zval *element;
 	MAKE_STD_ZVAL(element);
 	ZVAL_STRINGL(element, (value) ? value : "", value_length, TRUE);
-	zend_hash_update(HASH_OF(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
+	zend_hash_update(Z_ARRVAL_P(array), key, strlen(key) + 1, (void *) &element, sizeof(zval *), NULL);
 }
 
 zval *av_create_gd_image(uint32_t width, uint32_t height TSRMLS_DC) {
