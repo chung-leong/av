@@ -2495,8 +2495,7 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer, double *p_t
 				case SUBTITLE_BITMAP: {
 					z_image = av_create_gd_image(rect->w, rect->h TSRMLS_CC);
 					if(z_image) {
-						gdImage *image;
-						ZEND_FETCH_RESOURCE_NO_RETURN(image, gdImagePtr, &z_image, -1, "image", le_gd);
+						gdImagePtr image = (gdImagePtr) zend_fetch_resource(&z_image TSRMLS_CC, -1, "image", NULL, 1, le_gd);
 						av_copy_subtitle_to_gd(&rect->pict, rect->nb_colors, image);
 						zend_hash_update(Z_ARRVAL_P(z_rect), "image", strlen("image") + 1, (void *) &z_image, sizeof(zval *), NULL);
 					}
