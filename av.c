@@ -2477,7 +2477,7 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer, double *p_t
 		av_set_element_double(buffer, "start", (double) strm->subtitle->start_display_time * (1.0 / 1000));
 		av_set_element_double(buffer, "end", (double) strm->subtitle->end_display_time * (1.0 / 1000));
 		ALLOC_INIT_ZVAL(z_rects);
-		array_init_size(z_rects, strm->subtitle->num_rects);
+		array_init(z_rects);
 		zend_hash_update(HASH_OF(buffer), "rects", strlen("rects") + 1, (void *) &z_rects, sizeof(zval *), NULL);
 
 		for(i = 0; i < strm->subtitle->num_rects; i++) {
