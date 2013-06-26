@@ -9,7 +9,7 @@ Video seek test
 
 $folder = dirname(__FILE__);
 $image = imagecreatetruecolor(852, 480);
-$file_in = av_file_open("$folder/source-code.mov", "rb");
+$file_in = av_file_open("$folder/source-code.mkv", "rb");
 
 $a_strm_in = av_stream_open($file_in, "audio");
 $v_strm_in = av_stream_open($file_in, "video");
@@ -57,11 +57,11 @@ if(av_stream_read_pcm($a_strm_in, $pcm, $a_time)) {
 
 ?>
 --EXPECT--
-V: 9.9683
-A: 9.9840
+V: 9.9690
+A: 9.9830
 V: 10.0100
-A: 10.0053
-V: 29.7798
-A: 29.8453
-V: 9.0924
-A: 9.0880
+A: 10.0050
+V: 29.8220
+A: 29.8870
+V: 9.1760
+A: 9.1510

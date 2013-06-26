@@ -861,7 +861,7 @@ PHP_FUNCTION(av_file_stat)
 		AVCodecContext *c = s->codec;
 		AVCodec *d = avcodec_find_decoder(c->codec_id);
 		const char *stream_type, *codec, *codec_name;
-		double frame_rate = 0, duration;
+		double duration;
 
 		MAKE_STD_ZVAL(stream);
 		array_init(stream);
@@ -877,13 +877,6 @@ PHP_FUNCTION(av_file_stat)
 	    }
 		codec = (d) ? d->name : "unknown";
 		codec_name = (d) ? d->long_name : "unknown";
-		if(c->codec_type == AVMEDIA_TYPE_VIDEO) {
-			if(s->avg_frame_rate.den != 0) {
-				frame_rate = av_q2d(s->avg_frame_rate);
-			} else if(s->r_frame_rate.den != 0) {
-				frame_rate = av_q2d(s->r_frame_rate);
-			}
-		}
 		if(s->duration != AV_NOPTS_VALUE) {
 			duration = (double) s->duration * av_q2d(s->time_base);
 		} else if(s->nb_frames != 0) {
@@ -899,15 +892,31 @@ PHP_FUNCTION(av_file_stat)
 		av_set_element_string(stream, "codec_name", codec_name);
 		av_set_element_long(stream, "bit_rate", c->bit_rate);
 		av_set_element_double(stream, "duration", duration);
-		av_set_element_double(stream, "frame_rate", frame_rate);
 
-		av_set_element_long(stream, "height", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->height : 0);
-		av_set_element_long(stream, "width", (c->codec_type == AVMEDIA_TYPE_VIDEO) ? c->width : 0);
-
-		if(c->codec_type == AVMEDIA_TYPE_SUBTITLE) {
-			if(c->subtitle_header_size > 0) {
-				av_set_element_stringl(stream, "subtitle_header", c->subtitle_header, c->subtitle_header_size);
-			}
+		switch(c->codec_type) {
+			case AVMEDIA_TYPE_VIDEO: {
+				double frame_rate = 0;
+				if(c->codec_type == AVMEDIA_TYPE_VIDEO) {
+					if(s->avg_frame_rate.den != 0) {
+						frame_rate = av_q2d(s->avg_frame_rate);
+					} else if(s->r_frame_rate.den != 0) {
+						frame_rate = av_q2d(s->r_frame_rate);
+					}
+				}
+				av_set_element_double(stream, "frame_rate", frame_rate);
+				av_set_element_long(stream, "height",  c->height);
+				av_set_element_long(stream, "width", c->width);
+			}	break;
+			case AVMEDIA_TYPE_AUDIO: {
+				av_set_element_long(stream, "channel_layout",  c->channel_layout);
+				av_set_element_long(stream, "channels", c->channels);
+				av_set_element_long(stream, "sample_rate", c->sample_rate);
+			}	break;
+			case AVMEDIA_TYPE_SUBTITLE: {
+				if(c->subtitle_header_size > 0) {
+					av_set_element_stringl(stream, "subtitle_header", c->subtitle_header, c->subtitle_header_size);
+				}
+			}	break;
 		}
 
 		// add metadata of stream
@@ -1167,6 +1176,8 @@ PHP_FUNCTION(av_stream_open)
 		long bit_rate = (media_type == AVMEDIA_TYPE_VIDEO) ? 256000 : 64000;
 		long width = 320, height = 240;
 		long gop_size = 600;
+		long channels = 2;
+		long channel_layout = 0;
 		enum AVPixelFormat pix_fmt = AV_PIX_FMT_NONE;
 		char *codec_name = NULL;
 		char *pixel_format_name = NULL;
@@ -1245,13 +1256,21 @@ PHP_FUNCTION(av_stream_open)
 			case AVMEDIA_TYPE_AUDIO:
 				av_get_element_long(z_options, "sampling_rate", &sample_rate);
 				av_get_element_long(z_options, "bit_rate", &bit_rate);
+				av_get_element_long(z_options, "channels", &channels);
+				if(!av_get_element_long(z_options, "channel_layout", &channel_layout)) {
+					switch(channels) {
+						case 1: channel_layout = AV_CH_LAYOUT_MONO; break;
+						case 2: channel_layout = AV_CH_LAYOUT_STEREO; break;
+						default: channel_layout = 0; break;
+					}
+				}
 
 				file->format_cxt->audio_codec_id = codec->id;
 				codec_cxt->sample_fmt = codec->sample_fmts[0];
 				codec_cxt->time_base = av_d2q(1 / sample_rate, 1024);
 				codec_cxt->sample_rate = sample_rate;
-				codec_cxt->channel_layout = AV_CH_LAYOUT_STEREO;
-				codec_cxt->channels = 2;
+				codec_cxt->channel_layout = channel_layout;
+				codec_cxt->channels = channels;
 				codec_cxt->global_quality = 3540;
 				codec_cxt->bit_rate = bit_rate;
 				codec_cxt->flags |= CODEC_FLAG_QSCALE;
