@@ -22,6 +22,14 @@
 #include "config.h"
 #endif
 
+#ifdef _MSC_VER
+	#if _MSC_VER < 1700
+	int isnan(double x) {
+		return x != x;
+	}
+	#endif
+#endif
+
 #include "php.h"
 #include "php_ini.h"
 #include "ext/standard/info.h"
@@ -1005,34 +1013,37 @@ int av_codec_is_decoder(const AVCodec *codec)
 }
 #endif
 
-static int av_find_codec(const char *short_name, AVCodec **p_enc, AVCodec **p_dec)
-{
-	AVCodec *codec = NULL;
-	if(p_enc) {
-		*p_enc = NULL;
+static int av_find_codec(const char *short_name, AVCodec **p_enc, AVCodec **p_dec) {
+	int found = FALSE;
+	AVCodec *codec = NULL, *encoder = NULL, *decoder = NULL;
+	while((codec = av_codec_next(codec))) {
+		if(av_strcasecmp(short_name, codec->name) == 0) {
+			if(av_codec_is_encoder(codec)) {
+				encoder = codec;
+			} else if(av_codec_is_decoder(codec)) {
+				decoder = codec;
+			}
+			found = TRUE;
+		}
 	}
+	if(decoder && !encoder) {
+		codec = NULL;
+		while ((codec = av_codec_next(codec))) {
+			if(codec->id == decoder->id) {
+				if(av_codec_is_encoder(codec)) {
+					encoder = codec;
+					break;
+				}
+			}
+		}
+	}
+ 	if(p_enc) {
+		*p_enc = encoder;
+ 	}
 	if(p_dec) {
-		*p_dec = NULL;
+		*p_dec = decoder;
 	}
-    while ((codec = av_codec_next(codec))) {
-        if (av_strcasecmp(short_name, codec->name) == 0) {
-        	enum AVCodecID id = codec->id;
-        	do {
-        		if(av_codec_is_encoder(codec)) {
-        			if(p_enc) {
-        				*p_enc = codec;
-        			}
-        		} else if(av_codec_is_decoder(codec)) {
-        			if(p_dec) {
-        				*p_dec = codec;
-        			}
-        		}
-        		codec = av_codec_next(codec);
-        	} while(codec && codec->id == id);
-            return TRUE;
-        }
-    }
-    return FALSE;
+	return found;
 }
 
 /* {{{ proto string av_stream_open(resource file, mixed id, [, array options])
@@ -2231,14 +2242,6 @@ static int av_decode_next_subtitle(av_stream *strm, double *p_time TSRMLS_DC) {
 	}
 	return TRUE;
 }
-
-#ifdef _MSC_VER
-	#if _MSC_VER < 1700
-	int isnan(double x) {
-		return x != x;
-	}
-	#endif
-#endif
 
 static int av_encode_image_from_gd(av_stream *strm, gdImagePtr image, double time TSRMLS_DC) {
 	av_create_picture_and_scaler(strm, image->sx, image->sy, FOR_ENCODING);
