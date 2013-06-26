@@ -24,7 +24,7 @@
 #define MAKE_STRING(x)							#x
 #define STRING(x)								MAKE_STRING(x)
 #define AV_MAJOR_VERSION						1
-#define AV_MINOR_VERSION						1
+#define AV_MINOR_VERSION						2
 
 #ifndef Z_ADDREF_P
 	#define Z_ADDREF_P(zv)						zv->refcount++
