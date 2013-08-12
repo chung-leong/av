@@ -251,7 +251,7 @@ static void av_free_file(av_file *file) {
 					sws_freeContext(strm->scaler_cxt);
 				}
 				if(strm->resampler_cxt) {
-#if defined(HAVE_SWRESAMPLE)
+#if defined(HAVE_SWSRESAMPLE)
 					swr_free(&strm->resampler_cxt);
 #elif defined(HAVE_AVRESAMPLE)
 					avresample_close(strm->resampler_cxt);
@@ -1646,7 +1646,7 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
 		double frame_duration = (double) strm->codec_cxt->frame_size / strm->codec_cxt->sample_rate;
 
-#if defined(HAVE_SWRESAMPLE)
+#if defined(HAVE_SWSRESAMPLE)
 		if(purpose == FOR_ENCODING) {
 			strm->resampler_cxt = swr_alloc_set_opts(NULL, strm->codec_cxt->channel_layout, strm->codec_cxt->sample_fmt, strm->codec_cxt->sample_rate, AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_FLT, 44100, 0, NULL);
 		} else {
@@ -1761,7 +1761,7 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 		avcodec_fill_audio_frame(strm->frame, strm->codec_cxt->channels, strm->codec_cxt->sample_fmt, (uint8_t *) samples, buffer_size, 1);
 		strm->flags |= AV_STREAM_AUDIO_BUFFER_ALLOCATED;
 	}
-#if defined(HAVE_SWRESAMPLE)
+#if defined(HAVE_SWSRESAMPLE)
 	swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_count);
 #elif defined(HAVE_AVRESAMPLE)
 	avresample_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, 0, strm->frame->nb_samples, (uint8_t **) &strm->samples, 0, strm->sample_count);
@@ -1834,7 +1834,7 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 }
 
 static void av_transfer_pcm_from_frame(av_stream *strm) {
-#if defined(HAVE_SWRESAMPLE)
+#if defined(HAVE_SWSRESAMPLE)
 	strm->sample_count = swr_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, strm->sample_buffer_size, (const uint8_t **) strm->frame->data, strm->frame->nb_samples);
 #elif defined(HAVE_AVRESAMPLE)
 	strm->sample_count = avresample_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, 0, strm->sample_buffer_size, (uint8_t **) strm->frame->data, 0, strm->frame->nb_samples);

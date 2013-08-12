@@ -62,7 +62,7 @@ extern zend_module_entry av_module_entry;
 #include <libavutil/pixdesc.h>
 #include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
-#if defined(HAVE_SWRESAMPLE)
+#if defined(HAVE_SWSRESAMPLE)
 #include <libswresample/swresample.h>
 #elif defined(HAVE_AVRESAMPLE)
 #include <libavresample/avresample.h>
