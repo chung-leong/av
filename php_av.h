@@ -62,7 +62,7 @@ extern zend_module_entry av_module_entry;
 #include <libavutil/pixdesc.h>
 #include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
-#if defined(HAVE_SWSRESAMPLE)
+#if defined(HAVE_SWRESAMPLE)
 #include <libswresample/swresample.h>
 #elif defined(HAVE_AVRESAMPLE)
 #include <libavresample/avresample.h>
@@ -99,7 +99,7 @@ struct av_stream {
 	uint32_t sample_count;				// the number of samples currently buffered
 	uint32_t sample_buffer_size;		// the number of samples in an audio frame
 	double sample_start_time;
-#if defined(HAVE_SWSRESAMPLE)
+#if defined(HAVE_SWRESAMPLE)
 	struct SwrContext *resampler_cxt;	// resampler context
 #elif defined(HAVE_AVRESAMPLE)
 	AVAudioResampleContext * resampler_cxt;

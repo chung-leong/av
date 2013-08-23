@@ -12,7 +12,7 @@ if (PHP_AV != "no") {
 	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libswscale\\');
 	ADD_FLAG("CFLAGS_AV", '/I ext\\av\\win32\\ffmpeg\\include\\libswresample\\');
 	
-	ADD_FLAG("CFLAGS_AV", '/DHAVE_SWSRESAMPLE=1');
+	ADD_FLAG("CFLAGS_AV", '/DHAVE_SWRESAMPLE=1');
 	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_ENCODE_AUDIO2=1');
 	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_ENCODE_VIDEO2=1');
 	ADD_FLAG("CFLAGS_AV", '/DHAVE_AVCODEC_DEFAULT_GET_BUFFER2=1');
