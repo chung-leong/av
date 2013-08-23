@@ -2,7 +2,7 @@ require 'formula'
 
 class PhpAv < Formula
   homepage 'http://www.php-qb.net/'
-  url 'https://php-qb.googlecode.com/files/av-1.2-source-code.tar.bz2'
+  url 'https://php-qb.googlecode.com/files/av-1.3-source-code.tar.bz2'
   sha1 '9674f5fc826f6f39ecb385d2bee64b65f031d273'
 
   depends_on 'autoconf' => :build
