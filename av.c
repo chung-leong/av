@@ -1001,7 +1001,7 @@ int av_strcasecmp(const char *a, const char *b);
 int av_codec_is_encoder(const AVCodec *codec)
 {
 #if HAVE_AVCODEC_ENCODE_AUDIO2
-    return codec && codec->encode2;
+    return codec && (codec->encode2 || codec->encode);
 #else
     return codec && codec->encode;
 #endif
@@ -1169,7 +1169,7 @@ PHP_FUNCTION(av_stream_open)
 		codec_cxt = stream->codec;
 		codec_cxt->thread_count = thread_count;
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to open codec '%s'", codec_cxt->codec->name);
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open codec '%s'", codec_cxt->codec->name);
 			return;
 		}
 		
@@ -1301,7 +1301,7 @@ PHP_FUNCTION(av_stream_open)
 		}
 
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to open codec '%s'", codec->name);
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open codec '%s'", codec->name);
 			return;
 		}
 
@@ -2270,7 +2270,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 	uint32_t src_samples_remaining;
 
 	if(Z_TYPE_P(buffer) != IS_STRING) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Audio data must be contained in a string");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "audio data must be contained in a string");
 		return FALSE;
 	}
 
@@ -2375,15 +2375,15 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 	uint32_t i;
 
 	if(Z_TYPE_P(buffer) != IS_ARRAY) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle data must be contained in an array");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "subtitle data must be contained in an array");
 		return FALSE;
 	}
 	if(!av_get_element_double(buffer, "start", &start_time) || !av_get_element_double(buffer, "end", &end_time)) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle data must contain start and end time");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "subtitle data must contain start and end time");
 		return FALSE;
 	}
 	if(!av_get_element_hash(buffer, "rects", &ht)) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle data must contain rects");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "subtitle data must contain rects");
 		return FALSE;
 	}
 	for(p = ht->pListHead; p; p = p->pListNext) {
@@ -2391,20 +2391,20 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 		if(!av_get_element_resource(*p_element, "image", &z_image)
 		&& !av_get_element_string(*p_element, "text", &text)
 		&& !av_get_element_string(*p_element, "ass", &ass)) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle rectangle must contain image, text, or ass");
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "subtitle rectangle must contain image, text, or ass");
 			return FALSE;
 		}
 		if(z_image) {
 			image = (gdImagePtr) zend_fetch_resource(&z_image TSRMLS_CC, -1, NULL, NULL, 1, le_gd);
 			if(!image || image->trueColor) {
-				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle image must use a palette");
+				php_error_docref(NULL TSRMLS_CC, E_WARNING, "subtitle image must use a palette");
 				return FALSE;
 			}
 			if(!av_get_element_long(*p_element, "x", &x)
 			|| !av_get_element_long(*p_element, "y", &y)
 			|| !av_get_element_long(*p_element, "width", &width)
 			|| !av_get_element_long(*p_element, "height", &height)) {
-				php_error_docref(NULL TSRMLS_CC, E_WARNING, "Subtitle rectangle must contain x, y, width, and height");
+				php_error_docref(NULL TSRMLS_CC, E_WARNING, "subtitle rectangle must contain x, y, width, and height");
 				return FALSE;
 			}
 		}
@@ -2536,7 +2536,7 @@ PHP_FUNCTION(av_stream_write_image)
 	av_set_log_level(TSRMLS_C);
 
 	if(strm->codec->type != AVMEDIA_TYPE_VIDEO) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a video stream");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "not a video stream");
 		return;
 	}
 	if(av_encode_image_from_gd(strm, image, time TSRMLS_CC)) {
@@ -2563,7 +2563,7 @@ PHP_FUNCTION(av_stream_write_pcm)
 	av_set_log_level(TSRMLS_C);
 
 	if(strm->codec->type != AVMEDIA_TYPE_AUDIO) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not an audio stream");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "not an audio stream");
 		return;
 	}
 	if(av_encode_pcm_from_zval(strm, z_buffer, time TSRMLS_CC)) {
@@ -2590,7 +2590,7 @@ PHP_FUNCTION(av_stream_write_subtitle)
 	av_set_log_level(TSRMLS_C);
 
 	if(strm->codec->type != AVMEDIA_TYPE_SUBTITLE) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a subtitle stream");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "not a subtitle stream");
 		return;
 	}
 	if(av_encode_subtitle_from_zval(strm, z_buffer, time TSRMLS_CC)) {
@@ -2619,7 +2619,7 @@ PHP_FUNCTION(av_stream_read_image)
 	av_set_log_level(TSRMLS_C);
 
 	if(strm->codec->type != AVMEDIA_TYPE_VIDEO) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a video stream");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "not a video stream");
 		return;
 	}
 	if(av_decode_image_to_gd(strm, image, &time TSRMLS_CC)) {
@@ -2650,7 +2650,7 @@ PHP_FUNCTION(av_stream_read_pcm)
 	av_set_log_level(TSRMLS_C);
 
 	if(strm->codec->type != AVMEDIA_TYPE_AUDIO) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not an audio stream");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "not an audio stream");
 		return;
 	}
 	if(av_decode_pcm_to_zval(strm, z_buffer, &time TSRMLS_CC)) {
@@ -2681,7 +2681,7 @@ PHP_FUNCTION(av_stream_read_subtitle)
 	av_set_log_level(TSRMLS_C);
 
 	if(strm->codec->type != AVMEDIA_TYPE_SUBTITLE) {
-		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Not a subtitle stream");
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "not a subtitle stream");
 		return;
 	}
 	if(av_decode_subtitle_to_zval(strm, z_subtitle, &time TSRMLS_CC)) {
