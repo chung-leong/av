@@ -78,6 +78,10 @@ extern zend_module_entry av_module_entry;
 #define AV_CODEC_ID_GIF				CODEC_ID_GIF
 #endif
 
+#if _MSC_VER >= 1700
+	#define isnan				_isnan
+#endif
+
 typedef struct av_file av_file;
 typedef struct av_stream av_stream;
 
