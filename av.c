@@ -310,7 +310,9 @@ static void av_free_stream(av_stream *strm) {
 		av_file *file = strm->file;
 		file->open_stream_count--;
 		if(file->flags & AV_FILE_WRITE) {
-			av_flush_remaining_frames(strm);
+			if(file->flags & AV_FILE_HEADER_WRITTEN) {
+				av_flush_remaining_frames(strm);
+			}
 		}
 		strm->flags |= AV_STREAM_FREED;
 		if(file->open_stream_count == 0) {
@@ -1085,7 +1087,12 @@ PHP_FUNCTION(av_stream_open)
 			}
 		} else if(Z_TYPE_P(z_id) == IS_LONG || Z_TYPE_P(z_id) == IS_DOUBLE) {
 			stream_index = (Z_TYPE_P(z_id) == IS_DOUBLE) ? (long) Z_DVAL_P(z_id) : Z_LVAL_P(z_id);
-			if(!(stream_index >= 0 && (uint32_t) stream_index < file->stream_count)) {
+			
+			if(stream_index >= 0 && (uint32_t) stream_index < file->stream_count) {
+				stream = file->format_cxt->streams[stream_index];
+				media_type = stream->codec->codec_type;
+				codec = avcodec_find_decoder(stream->codec->codec_id);
+			} else {
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "stream index must be between 0 and %d", file->stream_count);
 				return;
 			}
@@ -1114,6 +1121,9 @@ PHP_FUNCTION(av_stream_open)
 				php_error_docref(NULL TSRMLS_CC, E_WARNING, "parameter 2 should be \"video\", \"audio\", \"subtitle\"");
 				return;
 			}
+		} else {
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "parameter 2 should be \"video\", \"audio\", \"subtitle\"");
+			return;
 		}
 		if(file->flags & AV_FILE_HEADER_WRITTEN) {
 			php_error_docref(NULL TSRMLS_CC, E_WARNING, "cannot add additional streams as encoding has already begun");
@@ -1146,32 +1156,11 @@ PHP_FUNCTION(av_stream_open)
 	}
 
 	if(file->flags & AV_FILE_READ) {
-		if(Z_TYPE_P(z_id) == IS_STRING) {
-			int32_t type = av_get_stream_type(Z_STRVAL_P(z_id) TSRMLS_CC);
-			if(type < 0) {
-				return;
-			}
-			stream_index = av_find_best_stream(file->format_cxt, type, -1, -1, &codec, 0);
-			if(stream_index < 0) {
-				php_error_docref(NULL TSRMLS_CC, E_WARNING, "cannot find a stream of type '%s'", Z_STRVAL_P(z_id));
-				return;
-			}
-		} else if(Z_TYPE_P(z_id) == IS_LONG || Z_TYPE_P(z_id) == IS_DOUBLE) {
-			stream_index = (Z_TYPE_P(z_id) == IS_DOUBLE) ? (long) Z_DVAL_P(z_id) : Z_LVAL_P(z_id);
-			if(!(stream_index >= 0 && (uint32_t) stream_index < file->stream_count)) {
-				php_error_docref(NULL TSRMLS_CC, E_WARNING, "stream index must be between 0 and %d", file->stream_count);
-				return;
-			}
-		} else {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "parameter 2 should be \"video\", \"audio\", \"subtitle\", or an stream index");
-			return;
-		}
-
 		stream = file->format_cxt->streams[stream_index];
 		codec_cxt = stream->codec;
 		codec_cxt->thread_count = thread_count;
-		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open codec '%s'", codec_cxt->codec->name);
+		if(avcodec_open2(codec_cxt, codec, NULL) < 0) {
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to open codec '%s'", (codec) ? codec->name : "???");
 			return;
 		}
 		
@@ -1303,7 +1292,7 @@ PHP_FUNCTION(av_stream_open)
 		}
 
 		if (avcodec_open2(codec_cxt, codec, NULL) < 0) {
-			php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open codec '%s'", codec->name);
+			php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to open codec '%s'", (codec) ? codec->name : "???");
 			return;
 		}
 

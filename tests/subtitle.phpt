@@ -8,17 +8,19 @@ $file_in = av_file_open("$folder/source-code.mkv", "r");
 $stat_in = av_file_stat($file_in);
 $s_strm_in = av_stream_open($file_in, "subtitle");
 
-if($file_in) {
-	while(!av_file_eof($file_in)) {
-		if(av_stream_read_subtitle($s_strm_in, $subtitle, $s_time)) {			
-			$rects = $subtitle['rects'];
-			foreach($rects as $rect) {
-				$ass = $rect['ass'];
-				echo $ass;
-			}
-		} else {
-			break;
+if(!$file_in || !$s_strm_in) {
+	die();
+}
+
+while(!av_file_eof($file_in)) {
+	if(av_stream_read_subtitle($s_strm_in, $subtitle, $s_time)) {			
+		$rects = $subtitle['rects'];
+		foreach($rects as $rect) {
+			$ass = $rect['ass'];
+			echo $ass;
 		}
+	} else {
+		break;
 	}
 }
 

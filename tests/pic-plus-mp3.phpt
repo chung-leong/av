@@ -29,8 +29,13 @@ $v_strm_out1 = av_stream_open($file_out1, "video", array( "width" => imagesx($im
 $a_strm_out2 = av_stream_open($file_out2, "audio");
 $v_strm_out2 = av_stream_open($file_out2, "video", array( "width" => imagesx($image), "height" => imagesy($image), "frame_rate" => $frame_rate ));
 
+if(!$file_in || !$file_out1 || !$file_out2 || !$a_strm_in || !$image || !$a_strm_out1 || !$a_strm_out2 || !$v_strm_out1 || !$v_strm_out2) {
+	die();
+}
+
 $v_time = 0;
 $a_time = 0;
+
 while(!av_file_eof($file_in)) {
 	if($v_time < $a_time || !isset($a_strm_in)) {
 		av_stream_write_image($v_strm_out1, $image, $v_time);
