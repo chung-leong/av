@@ -44,7 +44,7 @@ if($file_in) {
 				$a_time = INF;
 			}
 		} else {
-			if(av_stream_read_subtitle($s_strm_in, $subtitle, $s_time)) {			
+			if(av_stream_read_subtitle($s_strm_in, $subtitle, $s_time)) {
 				av_stream_write_subtitle($s_strm_out, $subtitle, $s_time);
 				echo "[SUBTITLE]\n";
 			} else {

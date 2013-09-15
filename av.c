@@ -417,7 +417,7 @@ PHP_RINIT_FUNCTION(av)
 	if(le_gd == -1) {
 		le_gd = zend_fetch_list_dtor_id("gd");
 	}
-#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2)
+#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)
 	AV_G(encoding_buffer) = NULL;
 	AV_G(encoding_buffer_size) = 0;
 #endif
@@ -433,7 +433,7 @@ PHP_RINIT_FUNCTION(av)
  */
 PHP_RSHUTDOWN_FUNCTION(av)
 {
-#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2)
+#if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)
 	if(AV_G(encoding_buffer)) {
 		efree(AV_G(encoding_buffer));
 	}
@@ -922,9 +922,11 @@ PHP_FUNCTION(av_file_stat)
 			}	break;
 			case AVMEDIA_TYPE_SUBTITLE: {
 				if(c->subtitle_header_size > 0) {
-					av_set_element_stringl(stream, "subtitle_header", c->subtitle_header, c->subtitle_header_size);
+					av_set_element_stringl(stream, "subtitle_header", (char *) c->subtitle_header, (long) c->subtitle_header_size);
 				}
 			}	break;
+			default:
+				break;
 		}
 
 		// add metadata of stream
@@ -2019,7 +2021,6 @@ static void av_copy_subtitle_from_gd(AVPicture *picture, int *p_color_count, gdI
 
 static int av_write_file_header(av_file *file) {
 	if(!(file->flags & AV_FILE_HEADER_WRITTEN)) {
-		av_stream *subtitle_strm = NULL;
 		if(avformat_write_header(file->format_cxt, NULL) < 0) {
 			if(!(file->flags & AV_FILE_HEADER_ERROR_ENCOUNTERED)) {
 				TSRMLS_FETCH();
@@ -2168,7 +2169,6 @@ static int av_decode_next_frame(av_stream *strm, double *p_time TSRMLS_DC) {
 }
 
 static int av_encode_next_subtitle(av_stream *strm, double time) {
-	av_file *file = strm->file;
 	int packet_finished = FALSE;
 	int result;
 	AVPacket *packet;
@@ -2371,7 +2371,7 @@ static int av_encode_subtitle_from_zval(av_stream *strm, zval *buffer, double ti
 	zval *z_image = NULL;
 	gdImagePtr image = NULL;
 	char *text = NULL, *ass = NULL;
-	uint32_t len;
+	long len;
 	uint32_t i;
 
 	if(Z_TYPE_P(buffer) != IS_ARRAY) {
@@ -2472,10 +2472,12 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer, double *p_t
 	if(av_decode_next_subtitle(strm, p_time TSRMLS_CC)) {
 		uint32_t i;
 		zval *z_rects;
+		double start_time = (double) strm->subtitle->start_display_time * (1.0 / 1000);
+		double end_time = (double) strm->subtitle->end_display_time * (1.0 / 1000);
 
 		array_init(buffer);
-		av_set_element_double(buffer, "start", (double) strm->subtitle->start_display_time * (1.0 / 1000));
-		av_set_element_double(buffer, "end", (double) strm->subtitle->end_display_time * (1.0 / 1000));
+		av_set_element_double(buffer, "start", start_time);
+		av_set_element_double(buffer, "end", end_time);
 		ALLOC_INIT_ZVAL(z_rects);
 		array_init(z_rects);
 		zend_hash_update(HASH_OF(buffer), "rects", strlen("rects") + 1, (void *) &z_rects, sizeof(zval *), NULL);
