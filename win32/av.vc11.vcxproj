@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug_TS|Win32">
+      <Configuration>Debug_TS</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_TS|x64">
+      <Configuration>Debug_TS</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_TS|Win32">
+      <Configuration>Release_TS</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release_TS|x64">
+      <Configuration>Release_TS</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{802891C8-34EC-4E13-81A2-1CF225CF9052}</ProjectGuid>
+    <RootNamespace>av</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v110</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v110</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v110</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v110</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v110</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v110</PlatformToolset>
+    <UseOfMfc>false</UseOfMfc>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC60.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC60.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC60.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="$(VCTargetsPath)Microsoft.CPP.UpgradeFromVC60.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>11.0.61030.0</_ProjectFileVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|Win32'">
+    <OutDir>..\Debug_TS\</OutDir>
+    <IntDir>..\Debug_TS\</IntDir>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>..\..\..\x64\Debug_TS\</OutDir>
+    <IntDir>..\x64\Debug_TS\</IntDir>
+    <TargetName>php_av</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|Win32'">
+    <OutDir>..\Release_TS\</OutDir>
+    <IntDir>..\Release_TS\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>..\..\..\x64\Debug_TS\</OutDir>
+    <IntDir>..\x64\Debug_TS\</IntDir>
+    <TargetName>php_av</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|Win32'">
+    <Midl>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MkTypLibCompatible>true</MkTypLibCompatible>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <TargetEnvironment>Win32</TargetEnvironment>
+      <TypeLibraryName>..\Debug_TS/av.tlb</TypeLibraryName>
+      <HeaderFileName />
+    </Midl>
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.\;..\..\..;..\..\..\Zend;..\..\..\TSRM;..\..\..\main;ffmpeg\include;ffmpeg\include\libavcodec;ffmpeg\include\libavformat;ffmpeg\include\libavutil;ffmpeg\include\libswresample;ffmpeg\include\libswscale;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZEND_DEBUG=1;WIN32;_DEBUG;_WINDOWS;COMPILE_DL_AV;ZTS=1;ZEND_WIN32;PHP_WIN32;HAVE_AV=1;_USE_32BIT_TIME_T;_CRT_SECURE_NO_WARNINGS;HAVE_SWRESAMPLE=1;HAVE_AVCODEC_ENCODE_AUDIO2=1;HAVE_AVCODEC_ENCODE_VIDEO2=1;HAVE_AVCODEC_DEFAULT_GET_BUFFER2=1;HAVE_AVCODEC_FREE_FRAME=1;HAVE_AV_CODEC_IS_ENCODER=1;HAVE_AVCODEC_FILL_AUDIO_FRAME=1;HAVE_FFURL_READ_COMPLETE=1;HAVE_FFURL_WRITE=1;HAVE_FFURL_SEEK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>UninitializedLocalUsageCheck</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Precise</FloatingPointModel>
+      <PrecompiledHeaderOutputFile>..\Debug_TS/av.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>..\Debug_TS/</AssemblerListingLocation>
+      <ObjectFileName>..\Debug_TS/</ObjectFileName>
+      <ProgramDataBaseFileName>..\Debug_TS/</ProgramDataBaseFileName>
+      <WarningLevel>Level3</WarningLevel>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0407</Culture>
+    </ResourceCompile>
+    <Link>
+      <AdditionalDependencies>php5ts_debug.lib;odbc32.lib;odbccp32.lib;avcodec.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>..\..\..\Debug_TS/php_av.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <AdditionalLibraryDirectories>..\..\..\Debug_TS;ffmpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>..\Debug_TS/php_av.pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention />
+      <ImportLibrary>..\Debug_TS/php_av.lib</ImportLibrary>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+    <Bscmake>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <OutputFile>..\Debug_TS/av.bsc</OutputFile>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|x64'">
+    <Midl>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MkTypLibCompatible>true</MkTypLibCompatible>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <TypeLibraryName>..\Debug_TS/av.tlb</TypeLibraryName>
+      <HeaderFileName>
+      </HeaderFileName>
+    </Midl>
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.\;..\..\..;..\..\..\Zend;..\..\..\TSRM;..\..\..\main;ffmpeg\include;ffmpeg\include\libavcodec;ffmpeg\include\libavformat;ffmpeg\include\libavutil;ffmpeg\include\libswresample;ffmpeg\include\libswscale;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZEND_DEBUG=1;WIN32;_DEBUG;_WINDOWS;COMPILE_DL_AV;ZTS=1;ZEND_WIN32;PHP_WIN32;HAVE_AV=1;_CRT_SECURE_NO_WARNINGS;HAVE_SWRESAMPLE=1;HAVE_AVCODEC_ENCODE_AUDIO2=1;HAVE_AVCODEC_ENCODE_VIDEO2=1;HAVE_AVCODEC_DEFAULT_GET_BUFFER2=1;HAVE_AVCODEC_FREE_FRAME=1;HAVE_AV_CODEC_IS_ENCODER=1;HAVE_AVCODEC_FILL_AUDIO_FRAME=1;HAVE_FFURL_READ_COMPLETE=1;HAVE_FFURL_WRITE=1;HAVE_FFURL_SEEK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <BasicRuntimeChecks>UninitializedLocalUsageCheck</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <FloatingPointModel>Precise</FloatingPointModel>
+      <PrecompiledHeaderOutputFile>..\Debug_TS/av.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>..\Debug_TS/</AssemblerListingLocation>
+      <ObjectFileName>..\Debug_TS/</ObjectFileName>
+      <ProgramDataBaseFileName>..\Debug_TS/</ProgramDataBaseFileName>
+      <WarningLevel>Level3</WarningLevel>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0407</Culture>
+    </ResourceCompile>
+    <Link>
+      <AdditionalDependencies>php5ts_debug.lib;odbc32.lib;odbccp32.lib;avcodec.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>..\..\..\x64\Debug_TS/php_av.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <AdditionalLibraryDirectories>..\..\..\x64\Debug_TS;ffmpeg\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ProgramDatabaseFile>..\Debug_TS/php_av.pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <ImportLibrary>..\Debug_TS/php_av.lib</ImportLibrary>
+    </Link>
+    <Bscmake>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <OutputFile>..\Debug_TS/av.bsc</OutputFile>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|Win32'">
+    <Midl>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MkTypLibCompatible>true</MkTypLibCompatible>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <TargetEnvironment>Win32</TargetEnvironment>
+      <TypeLibraryName>..\Release_TS/av.tlb</TypeLibraryName>
+      <HeaderFileName />
+    </Midl>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.\;..\..\..;..\..\..\Zend;..\..\..\TSRM;..\..\..\main;ffmpeg\include;ffmpeg\include\libavcodec;ffmpeg\include\libavformat;ffmpeg\include\libavutil;ffmpeg\include\libswresample;ffmpeg\include\libswscale;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;PHP_EXPORTS;COMPILE_DL_AV;ZTS=1;HAVE_AV=1;ZEND_DEBUG=0;NDEBUG;_WINDOWS;ZEND_WIN32;PHP_WIN32;_USE_32BIT_TIME_T;_CRT_SECURE_NO_WARNINGS;HAVE_SWRESAMPLE=1;HAVE_AVCODEC_ENCODE_AUDIO2=1;HAVE_AVCODEC_ENCODE_VIDEO2=1;HAVE_AVCODEC_DEFAULT_GET_BUFFER2=1;HAVE_AV_CODEC_IS_ENCODER=1;HAVE_AVCODEC_FILL_AUDIO_FRAME=1;HAVE_FFURL_READ_COMPLETE=1;HAVE_FFURL_WRITE=1;HAVE_FFURL_SEEK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>false</StringPooling>
+      <ExceptionHandling />
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>false</FunctionLevelLinking>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <PrecompiledHeaderOutputFile>..\Release_TS/av.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>..\Release_TS/</AssemblerListingLocation>
+      <ObjectFileName>..\Release_TS/</ObjectFileName>
+      <ProgramDataBaseFileName>..\Release_TS/</ProgramDataBaseFileName>
+      <WarningLevel>Level3</WarningLevel>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0407</Culture>
+    </ResourceCompile>
+    <Link>
+      <AdditionalDependencies>php5ts.lib;odbc32.lib;odbccp32.lib;avcodec.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>..\..\..\Release_TS/php_av.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <AdditionalLibraryDirectories>..\..\..\Release_TS;..\..\Release_TS_Inline;ffmpeg\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>..\Release_TS/php_av.pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <LinkTimeCodeGeneration />
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention />
+      <ImportLibrary>..\Release_TS/php_av.lib</ImportLibrary>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+    <Bscmake>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <OutputFile>..\Release_TS/av.bsc</OutputFile>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release_TS|x64'">
+    <Midl>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MkTypLibCompatible>true</MkTypLibCompatible>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <TypeLibraryName>..\Release_TS/av.tlb</TypeLibraryName>
+      <HeaderFileName>
+      </HeaderFileName>
+    </Midl>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.\;..\..\..;..\..\..\Zend;..\..\..\TSRM;..\..\..\main;ffmpeg\include;ffmpeg\include\libavcodec;ffmpeg\include\libavformat;ffmpeg\include\libavutil;ffmpeg\include\libswresample;ffmpeg\include\libswscale;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;PHP_EXPORTS;COMPILE_DL_AV;ZTS=1;HAVE_AV=1;ZEND_DEBUG=0;NDEBUG;_WINDOWS;ZEND_WIN32;PHP_WIN32;_CRT_SECURE_NO_WARNINGS;HAVE_SWRESAMPLE=1;HAVE_AVCODEC_ENCODE_AUDIO2=1;HAVE_AVCODEC_ENCODE_VIDEO2=1;HAVE_AVCODEC_DEFAULT_GET_BUFFER2=1;HAVE_AV_CODEC_IS_ENCODER=1;HAVE_AVCODEC_FILL_AUDIO_FRAME=1;HAVE_FFURL_READ_COMPLETE=1;HAVE_FFURL_WRITE=1;HAVE_FFURL_SEEK=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <StringPooling>false</StringPooling>
+      <ExceptionHandling>
+      </ExceptionHandling>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <FunctionLevelLinking>false</FunctionLevelLinking>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <PrecompiledHeaderOutputFile>..\Release_TS/av.pch</PrecompiledHeaderOutputFile>
+      <AssemblerListingLocation>..\Release_TS/</AssemblerListingLocation>
+      <ObjectFileName>..\Release_TS/</ObjectFileName>
+      <ProgramDataBaseFileName>..\Release_TS/</ProgramDataBaseFileName>
+      <WarningLevel>Level3</WarningLevel>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <CompileAs>Default</CompileAs>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <Culture>0x0407</Culture>
+    </ResourceCompile>
+    <Link>
+      <AdditionalDependencies>php5ts.lib;odbc32.lib;odbccp32.lib;avcodec.lib;avformat.lib;avutil.lib;swresample.lib;swscale.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>..\..\..\x64\Release_TS/php_av.dll</OutputFile>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <AdditionalLibraryDirectories>..\..\..\x64\Release_TS;ffmpeg\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <ProgramDatabaseFile>..\Release_TS/php_av.pdb</ProgramDatabaseFile>
+      <SubSystem>Windows</SubSystem>
+      <LinkTimeCodeGeneration>
+      </LinkTimeCodeGeneration>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <ImportLibrary>..\Release_TS/php_av.lib</ImportLibrary>
+    </Link>
+    <Bscmake>
+      <SuppressStartupBanner>true</SuppressStartupBanner>
+      <OutputFile>..\Release_TS/av.bsc</OutputFile>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\av.c" />
+    <ClCompile Include="..\av_utils.c" />
+    <ClCompile Include="..\faststart.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\php_av.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

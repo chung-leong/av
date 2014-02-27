@@ -28,6 +28,25 @@ if (PHP_AV != "no") {
 	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avutil.lib');
 	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swscale.lib');
 	ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swresample.lib');
+
+	PHP_CL = PATH_PROG('cl', null, 'PHP_CL');
+	if (!PHP_CL) {
+	    ERROR("MS C++ compiler is required");
+	}
+	X64 = probe_binary(PHP_CL, 64, null, 'PHP_CL');
+	if (X64) {
+	    ADD_FLAG("LIBS_AV", "ext\\av\\win32\\ffmpeg\\lib64\\avcodec.lib");
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib64\\avformat.lib');
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib64\\avutil.lib');
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib64\\swscale.lib');
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib64\\swresample.lib');
+	} else {
+	    ADD_FLAG("LIBS_AV", "ext\\av\\win32\\ffmpeg\\lib\\avcodec.lib");
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avformat.lib');
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\avutil.lib');
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swscale.lib');
+	    ADD_FLAG("LIBS_AV", 'ext\\av\\win32\\ffmpeg\\lib\\swresample.lib');
+	}
 	
 	EXTENSION("av", "av.c av_utils.c faststart.c");
 }
