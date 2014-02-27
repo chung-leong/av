@@ -23,11 +23,9 @@
 #endif
 
 #ifdef _MSC_VER
-	#if _MSC_VER < 1700
-	int isnan(double x) {
-		return x != x;
-	}
-	#endif
+int isnan(double x) {
+	return x != x;
+}
 #endif
 
 #include "php.h"
@@ -862,7 +860,7 @@ PHP_FUNCTION(av_file_stat)
 
 	MAKE_STD_ZVAL(streams);
 	array_init(streams);
-	zend_hash_update(HASH_OF(return_value), "streams", strlen("streams") + 1, (void *) &streams, sizeof(zval *), NULL);
+	zend_hash_update(HASH_OF(return_value), "streams", (uint32_t) strlen("streams") + 1, (void *) &streams, sizeof(zval *), NULL);
 	for(i = 0; i < f->nb_streams; i++) {
 		zval *stream;
 		AVStream *s = f->streams[i];
@@ -938,7 +936,7 @@ PHP_FUNCTION(av_file_stat)
 		// refer to stream using string key if it happens to be the best stream of a given type
 		if(i == av_find_best_stream(f, c->codec_type, -1, -1, NULL, 0)) {
 			Z_ADDREF_P(stream);
-			zend_hash_update(HASH_OF(streams), stream_type, strlen(stream_type) + 1, (void *) &stream, sizeof(zval *), NULL);
+			zend_hash_update(HASH_OF(streams), stream_type, (uint32_t) strlen(stream_type) + 1, (void *) &stream, sizeof(zval *), NULL);
 		}
 	}
 }
@@ -2478,7 +2476,7 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer, double *p_t
 		av_set_element_double(buffer, "end", (double) strm->subtitle->end_display_time * (1.0 / 1000));
 		ALLOC_INIT_ZVAL(z_rects);
 		array_init(z_rects);
-		zend_hash_update(HASH_OF(buffer), "rects", strlen("rects") + 1, (void *) &z_rects, sizeof(zval *), NULL);
+		zend_hash_update(HASH_OF(buffer), "rects", (uint32_t) strlen("rects") + 1, (void *) &z_rects, sizeof(zval *), NULL);
 
 		for(i = 0; i < strm->subtitle->num_rects; i++) {
 			AVSubtitleRect *rect = strm->subtitle->rects[i];
@@ -2497,7 +2495,7 @@ static int av_decode_subtitle_to_zval(av_stream *strm, zval *buffer, double *p_t
 					if(z_image) {
 						gdImagePtr image = (gdImagePtr) zend_fetch_resource(&z_image TSRMLS_CC, -1, "image", NULL, 1, le_gd);
 						av_copy_subtitle_to_gd(&rect->pict, rect->nb_colors, image);
-						zend_hash_update(Z_ARRVAL_P(z_rect), "image", strlen("image") + 1, (void *) &z_image, sizeof(zval *), NULL);
+						zend_hash_update(Z_ARRVAL_P(z_rect), "image", (uint32_t) strlen("image") + 1, (void *) &z_image, sizeof(zval *), NULL);
 					}
 				}	break;
 				case SUBTITLE_TEXT: {

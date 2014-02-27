@@ -140,7 +140,7 @@ int av_optimize_mov_file(AVIOContext *pb) {
             if (start_offset < 0) {
                 goto error_out;
             }
-        	if (ffurl_read_complete(file, ftyp_atom, (size_t) atom_size) != atom_size) {
+        	if (ffurl_read_complete(file, ftyp_atom, (int) atom_size) != atom_size) {
                 goto error_out;
             }
         } else {
