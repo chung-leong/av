@@ -1544,7 +1544,7 @@ static void av_flush_remaining_frames(av_stream *strm) {
 		AVPacket *packet;
 
 		if(strm->codec->type == AVMEDIA_TYPE_AUDIO) {
-			if(strm->sample_count) {
+			if(strm->sample_count > 0) {
 				av_transfer_pcm_to_frame(strm);
 				av_encode_next_frame(strm, strm->sample_start_time);
 				strm->sample_count = 0;
@@ -2277,6 +2277,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 			// the error is small--ignore it
 			strm->sample_start_time = start_time;
 		} else {
+			// TODO: should probably emit a notice if the error is large
 			if(strm->sample_count > 0) {
 				// start a new packet
 				av_transfer_pcm_to_frame(strm);
@@ -2286,6 +2287,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 				strm->sample_count = 0;
 			}
 			strm->sample_start_time = time;
+			dst_samples = strm->samples;
 		}
 	}
 
