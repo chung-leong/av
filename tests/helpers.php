@@ -170,4 +170,17 @@ function compareImage($img1, $img2) {
 	return $diff;
 }
 
+function comparePCM($pcm1, $pcm2) {
+	$array1 = unpack("f*", $pcm1);
+	$array2 = unpack("f*", $pcm2);
+	$count = min(count($array1, $array2));
+	$diff = 0;
+	for($i = 0; $i < $count; $i++) {
+		$float1 = $array1[$i];
+		$float2 = $array2[$i];
+		$diff += abs($float1 - $float2);
+	}	
+	return $diff;
+}
+
 ?>
