@@ -141,25 +141,27 @@ class SineWave {
 }
 
 function compareImage($img1, $img2) {
-	$sample1 = imagecreatetruecolor(16, 16);
-	$sample2 = imagecreatetruecolor(16, 16);
-	imagecopyresample($sample1, $img1, 0, 0, 0, 0, 16, 16, imagesx($img1), imagesy($img1));
-	imagecopyresample($sample2, $img2, 0, 0, 0, 0, 16, 16, imagesx($img2), imagesy($img2));
+	$w = 16;
+	$h = 16;
+	$sample1 = imagecreatetruecolor($w, $h);
+	$sample2 = imagecreatetruecolor($w, $h);
+	imagecopyresampled($sample1, $img1, 0, 0, 0, 0, $w, $h, imagesx($img1), imagesy($img1));
+	imagecopyresampled($sample2, $img2, 0, 0, 0, 0, $w, $h, imagesx($img2), imagesy($img2));
 
 	$diff = 0;
-	for($y = 0; $y < 16; $y++) {
-		for($x = 0; $x < 16; $x++) {
-			$argb1 = imagecolorat($img1, $x, $y);
-			$a1 = ($argb >> 24) & 0xFF;
-			$r1 = ($argb >> 16) & 0xFF;
-			$g1 = ($argb >>  8) & 0xFF;
-			$b1 = ($argb >>  0) & 0xFF;
+	for($y = 0; $y < $h; $y++) {
+		for($x = 0; $x < $w; $x++) {
+			$argb1 = imagecolorat($sample1, $x, $y);
+			$a1 = ($argb1 >> 24) & 0xFF;
+			$r1 = ($argb1 >> 16) & 0xFF;
+			$g1 = ($argb1 >>  8) & 0xFF;
+			$b1 = ($argb1 >>  0) & 0xFF;
 
-			$argb2 = imagecolorat($img2, $x, $y);
-			$a2 = ($argb >> 24) & 0xFF;
-			$r2 = ($argb >> 16) & 0xFF;
-			$g2 = ($argb >>  8) & 0xFF;
-			$b2 = ($argb >>  0) & 0xFF;
+			$argb2 = imagecolorat($sample2, $x, $y);
+			$a2 = ($argb2 >> 24) & 0xFF;
+			$r2 = ($argb2 >> 16) & 0xFF;
+			$g2 = ($argb2 >>  8) & 0xFF;
+			$b2 = ($argb2 >>  0) & 0xFF;
 
 			$diff += abs($a1 - $a2) / 127;
 			$diff += abs($r1 - $r2) / 255;
@@ -167,20 +169,20 @@ function compareImage($img1, $img2) {
 			$diff += abs($b1 - $b2) / 255;
 		}
 	}
-	return $diff;
+	return $diff / 50;
 }
 
 function comparePCM($pcm1, $pcm2) {
 	$array1 = unpack("f*", $pcm1);
 	$array2 = unpack("f*", $pcm2);
-	$count = min(count($array1, $array2));
+	$count = min(count($array1), count($array2));
 	$diff = 0;
-	for($i = 0; $i < $count; $i++) {
+	for($i = 1; $i <= $count; $i++) {
 		$float1 = $array1[$i];
 		$float2 = $array2[$i];
 		$diff += abs($float1 - $float2);
 	}	
-	return $diff;
+	return $diff / 50;
 }
 
 ?>
