@@ -2,9 +2,7 @@
 Live stream test
 --SKIPIF--
 <?php 
-	if(!function_exists('imagecreatetruecolor')) { 
-		print 'skip GD not available'; 
-	}
+	if(!function_exists('imagecreatetruecolor')) print 'skip GD not available'; 
 ?>
 --FILE--
 <?php
@@ -16,8 +14,6 @@ print_r($stat);
 $image = imagecreatetruecolor(640, 360);
 $strm = av_stream_open($file, "video");
 av_stream_read_image($strm, $image, $time);
-$folder = dirname(__FILE__);
-imagepng($image, "$folder/live.png");
 
 ?>
 --EXPECT--

@@ -58,46 +58,39 @@ class BouncingBallAnimation {
 	private $height;
 	private $image;
 	private $balls;
-	private $initialBalls;
 	private $backgroundColor;
 	private $duration;
 	
-	public function __construct($width, $height, $frame_rate) {
+	public function __construct($width, $height, $frameRate) {
 		$this->width = $width;
 		$this->height = $height;
 		$this->image = imagecreatetruecolor($this->width, $this->height);
 		
-		$this->initialBalls = array();
-		$this->initialBalls[] = new Ball(50, 50, 200, 200, 10, 20, $this->width, $this->height, imagecolorallocate($this->image, 255, 0, 0));
-		$this->initialBalls[] = new Ball(150, 50, 90, 90, -10, 20, $this->width, $this->height, imagecolorallocate($this->image, 255, 255, 0));
-		$this->initialBalls[] = new Ball(450, 150, 150, 150, -20, 1, $this->width, $this->height, imagecolorallocate($this->image, 0, 255, 0));
-		$this->initialBalls[] = new Ball(0, 350, 150, 150, 2, 10, $this->width, $this->height, imagecolorallocate($this->image, 0, 0, 255));
-		$this->initialBalls[] = new Ball(250, 0, 120, 120, 40, 5, $this->width, $this->height, imagecolorallocate($this->image, 0, 255, 255));
-		$this->initialBalls[] = new Ball(350, 350, 70, 70, 10, -40, $this->width, $this->height, imagecolorallocate($this->image, 0, 0, 0));
+		$this->balls = array();
+		$this->balls[] = new Ball(50, 50, 200, 200, 10, 20, $this->width, $this->height, imagecolorallocate($this->image, 255, 0, 0));
+		$this->balls[] = new Ball(150, 50, 90, 90, -10, 20, $this->width, $this->height, imagecolorallocate($this->image, 255, 255, 0));
+		$this->balls[] = new Ball(450, 150, 150, 150, -20, 1, $this->width, $this->height, imagecolorallocate($this->image, 0, 255, 0));
+		$this->balls[] = new Ball(0, 350, 150, 150, 2, 10, $this->width, $this->height, imagecolorallocate($this->image, 0, 0, 255));
+		$this->balls[] = new Ball(250, 0, 120, 120, 40, 5, $this->width, $this->height, imagecolorallocate($this->image, 0, 255, 255));
+		$this->balls[] = new Ball(350, 350, 70, 70, 10, -40, $this->width, $this->height, imagecolorallocate($this->image, 0, 0, 0));
 		
 		$this->backgroundColor = imagecolorallocate($this->image, 255, 255, 255);
-		$this->duration = 1 / $frame_rate;
+		$this->duration = 1 / $frameRate;
 	
-		foreach($this->initialBalls as $ball) {
+		foreach($this->balls as $ball) {
 			$ball->tick(0);
 		}
-		$this->reset();
 	}
 
-	public function reset() {
-		$this->balls = array();
-		foreach($this->initialBalls as $ball) {
-			$this->balls[] = clone $ball;
-		}
-		return $this->advance();
-	}
-	
 	public function advance() {
 		imagefilledrectangle($this->image, 0, 0, $this->width, $this->height, $this->backgroundColor);
 		foreach($this->balls as $ball) {
 			$ball->render($this->image);
 			$ball->tick(1);
 		}
+	}
+
+	public function get() {
 		return $this->image;
 	}
 	
@@ -114,11 +107,11 @@ class SineWave {
 	private $pcm;
 	private $duration;
 
-	public function __construct() {
+	public function __construct($amplitude = 0.25) {
 		// 100 stero samples comprising a sin wave at 441 hertz
 		$samples = "";
 		for($i = 0; $i < 100; $i++) {
-			$sin = sin(($i / 100) * 2 * M_PI);
+			$sin = sin(($i / 100) * 2 * M_PI) * $amplitude;
 			$samples .= pack("ff", $sin, $sin);
 		}
 		
@@ -127,7 +120,7 @@ class SineWave {
 		$this->duration = 1000 / 44100;
 	}
 	
-	public function generate() {
+	public function get() {
 		return $this->pcm;
 	}
 
@@ -140,49 +133,210 @@ class SineWave {
 	}	
 }
 
-function compareImage($img1, $img2) {
-	$w = 16;
-	$h = 16;
-	$sample1 = imagecreatetruecolor($w, $h);
-	$sample2 = imagecreatetruecolor($w, $h);
-	imagecopyresampled($sample1, $img1, 0, 0, 0, 0, $w, $h, imagesx($img1), imagesy($img1));
-	imagecopyresampled($sample2, $img2, 0, 0, 0, 0, $w, $h, imagesx($img2), imagesy($img2));
-
-	$diff = 0;
-	for($y = 0; $y < $h; $y++) {
-		for($x = 0; $x < $w; $x++) {
-			$argb1 = imagecolorat($sample1, $x, $y);
-			$a1 = ($argb1 >> 24) & 0xFF;
-			$r1 = ($argb1 >> 16) & 0xFF;
-			$g1 = ($argb1 >>  8) & 0xFF;
-			$b1 = ($argb1 >>  0) & 0xFF;
-
-			$argb2 = imagecolorat($sample2, $x, $y);
-			$a2 = ($argb2 >> 24) & 0xFF;
-			$r2 = ($argb2 >> 16) & 0xFF;
-			$g2 = ($argb2 >>  8) & 0xFF;
-			$b2 = ($argb2 >>  0) & 0xFF;
-
-			$diff += abs($a1 - $a2) / 127;
-			$diff += abs($r1 - $r2) / 255;
-			$diff += abs($g1 - $g2) / 255;
-			$diff += abs($b1 - $b2) / 255;
-		}
+class TestVideo {
+	private $path;
+	private $width;
+	private $height;
+	private $frameRate;
+	private $duration;
+	private $hasVideo;
+	private $hasAudio;
+	
+	public function __construct($path, $width, $height, $frameRate, $duration, $hasVideo = true, $hasAudio = true) {
+		$this->path = $path;
+		$this->width = $width;
+		$this->height = $height;
+		$this->frameRate = $frameRate;
+		$this->duration = $duration;
+		$this->hasVideo = $hasVideo;
+		$this->hasAudio = $hasAudio;
 	}
-	return $diff / 50;
-}
 
-function comparePCM($pcm1, $pcm2) {
-	$array1 = unpack("f*", $pcm1);
-	$array2 = unpack("f*", $pcm2);
-	$count = min(count($array1), count($array2));
-	$diff = 0;
-	for($i = 1; $i <= $count; $i++) {
-		$float1 = $array1[$i];
-		$float2 = $array2[$i];
-		$diff += abs($float1 - $float2);
-	}	
-	return $diff / 50;
+	public function create() {
+		// open file for writing
+		$file = av_file_open($this->path, "w");
+		if($this->hasVideo) {
+			$videoStream = av_stream_open($file, "video", array( "width" => $this->width, "height" => $this->height, "frame_rate" => $this->frameRate, "bit_rate" => 1024 * 1000, "gop" => 0));
+		}
+		if($this->hasAudio) {
+			$audioStream = av_stream_open($file, "audio");
+		}
+
+		if(!$file || ($this->hasVideo && !$videoStream) || ($this->hasAudio && !$audioStream)) {
+			throw new Exception("Error opening $path for writing\n");
+		}
+
+		if($this->hasVideo) {
+			$animation = new BouncingBallAnimation($this->width, $this->height, $this->frameRate);
+			$videoTime = 0.5 / $this->frameRate;
+		} else {
+			$videoTime = INF;
+		}
+		if($this->hasAudio) {
+			$tone = new SineWave;
+			$audioTime = 0;
+		} else {
+			$audioTime = INF;
+		}
+
+		while($videoTime < $this->duration || $audioTime < $this->duration) {
+			if($videoTime < $audioTime) {
+				// write to video stream
+				$animation->write($videoStream, $videoTime);
+				$animation->advance();
+			} else {
+				// write to audio stream
+				$tone->write($audioStream, $audioTime);
+			}
+		}
+
+		// close file
+		av_file_close($file);
+	}
+	
+	public function verify() {
+		// open file for reading
+		$file = av_file_open($this->path, "r");
+		if($this->hasVideo) {
+			$videoStream = av_stream_open($file, "video");
+		}
+		if($this->hasAudio) {
+			$audioStream = av_stream_open($file, "audio");
+		}
+
+		if(!$file || ($this->hasVideo && !$videoStream) || ($this->hasAudio && !$audioStream)) {
+			throw new Exception("Error opening $path for writing\n");
+		}
+
+		if($this->hasVideo) {
+			$animation = new BouncingBallAnimation($this->width, $this->height, $this->frameRate);
+			$videoTime = 0.5 / $this->frameRate;
+		} else {
+			$videoTime = INF;
+		}
+		if($this->hasAudio) {
+			$tone = new SineWave;
+			$audioTime = 0;
+		} else {
+			$audioTime = INF;
+		}
+		
+		$image2 = imagecreatetruecolor($this->width, $this->height);
+		$pcm1 = "";
+		$len1 = 0;
+
+		while($videoTime < $this->duration || $audioTime < $this->duration) {
+			if($videoTime < $audioTime) {
+				// read from video stream
+				if(av_stream_read_image($videoStream, $image2, $videoTime)) {
+					$image1 = $animation->get();
+					$diff = $this->compareImage($image1, $image2);
+					if($diff > 1) {
+						if(abs($this->duration - $videoTime) > 0.1) {
+							imagepng($image1, "{$this->path}.correct.png");
+							imagepng($image2, "{$this->path}.incorrect.png");
+							throw new Exception("Frame at $videoTime is different\n");
+						}
+					}
+					$animation->advance();
+				} else {
+					if(abs($this->duration - $videoTime) > 0.1) {
+						throw new Exception("Cannot read from video stream\n");
+					} else {
+						$videoTime = INF;
+					}
+				}
+			} else {
+				// read from audio stream
+				if(av_stream_read_pcm($audioStream, $pcm2, $audioTime)) {
+					$len2 = strlen($pcm2);
+					if($audioTime < 0) {
+						$offset = 0;
+						while($len2 > 0 && $audioTime < 0) {
+							$len2 -= 8;
+							$audioTime += 1 / 44100;
+							$offset += 8;
+						}
+						if($len2 == 0) {
+							continue;
+						}
+						$pcm2 = substr($pcm2, $offset);
+					}
+					while($len1 < $len2) {
+						// get another chunk of samples
+						$pcm1 .= $tone->get();
+						$len1 = strlen($pcm1);
+					}
+					$diff = $this->comparePCM($pcm1, $pcm2);
+					if($diff > 1) {
+						if(abs($this->duration - $audioTime) > 0.1) {
+							throw new Exception("Audio at $audioTime is different\n");
+						}
+					}
+					$pcm1 = substr($pcm1, $len2);
+					$len1 -= $len2;
+				} else {
+					if(abs($this->duration - $audioTime) > 0.1) {
+						throw new Exception("Cannot read from audio stream\n");
+					} else {
+						$audioTime = INF;
+					}
+				}
+			}
+		}
+		
+		// close file
+		av_file_close($file);
+	}
+	
+	public function delete() {
+		unlink($this->path);
+	}
+
+	protected function compareImage($img1, $img2) {
+		$w = 16;
+		$h = 16;
+		$sample1 = imagecreatetruecolor($w, $h);
+		$sample2 = imagecreatetruecolor($w, $h);
+		imagecopyresampled($sample1, $img1, 0, 0, 0, 0, $w, $h, imagesx($img1), imagesy($img1));
+		imagecopyresampled($sample2, $img2, 0, 0, 0, 0, $w, $h, imagesx($img2), imagesy($img2));
+	
+		$diff = 0;
+		for($y = 0; $y < $h; $y++) {
+			for($x = 0; $x < $w; $x++) {
+				$argb1 = imagecolorat($sample1, $x, $y);
+				$a1 = ($argb1 >> 24) & 0xFF;
+				$r1 = ($argb1 >> 16) & 0xFF;
+				$g1 = ($argb1 >>  8) & 0xFF;
+				$b1 = ($argb1 >>  0) & 0xFF;
+	
+				$argb2 = imagecolorat($sample2, $x, $y);
+				$a2 = ($argb2 >> 24) & 0xFF;
+				$r2 = ($argb2 >> 16) & 0xFF;
+				$g2 = ($argb2 >>  8) & 0xFF;
+				$b2 = ($argb2 >>  0) & 0xFF;
+	
+				$diff += abs($a1 - $a2) / 127;
+				$diff += abs($r1 - $r2) / 255;
+				$diff += abs($g1 - $g2) / 255;
+				$diff += abs($b1 - $b2) / 255;
+			}
+		}
+		return $diff / 50;
+	}
+
+	protected function comparePCM($pcm1, $pcm2) {
+		$array1 = unpack("f*", $pcm1);
+		$array2 = unpack("f*", $pcm2);
+		$count = min(count($array1), count($array2));
+		$diff = 0;
+		for($i = 1; $i <= $count; $i++) {
+			$float1 = $array1[$i];
+			$float2 = $array2[$i];
+			$diff += abs($float1 - $float2);
+		}	
+		return $diff / 50;
+	}
 }
 
 ?>
