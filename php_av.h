@@ -200,6 +200,9 @@ PHP_FUNCTION(av_stream_write_image);
 PHP_FUNCTION(av_stream_write_pcm);
 PHP_FUNCTION(av_stream_write_subtitle);
 
+PHP_FUNCTION(av_get_encoders);
+PHP_FUNCTION(av_get_decoders);
+
 ZEND_BEGIN_MODULE_GLOBALS(av)
 #if !defined(HAVE_AVCODEC_ENCODE_VIDEO2) || !defined(HAVE_AVCODEC_ENCODE_AUDIO2) || !defined(HAVE_AVCODEC_ENCODE_SUBTITLE2)
 	uint8_t *encoding_buffer;

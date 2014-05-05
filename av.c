@@ -114,6 +114,11 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_av_stream_write_subtitle, 0, 0, 3)
     ZEND_ARG_INFO(0, time)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_av_get_encoders, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_av_get_decoders, 0, 0, 0)
+ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ av_functions[]
@@ -136,6 +141,9 @@ const zend_function_entry av_functions[] = {
 	PHP_FE(av_stream_write_image,		arginfo_av_stream_write_image)
 	PHP_FE(av_stream_write_pcm,			arginfo_av_stream_write_pcm)
 	PHP_FE(av_stream_write_subtitle,	arginfo_av_stream_write_subtitle)
+
+	PHP_FE(av_get_encoders,				arginfo_av_get_encoders)
+	PHP_FE(av_get_decoders,				arginfo_av_get_decoders)
 
 #ifdef PHP_FE_END
 	PHP_FE_END	/* Must be the last line in av_functions[] */
@@ -2704,6 +2712,51 @@ PHP_FUNCTION(av_stream_close)
 }
 /* }}} */
 
+/* {{{ proto string av_get_encoders(void)
+   Get list of encoders available */
+PHP_FUNCTION(av_get_encoders)
+{
+    AVInputFormat *ifmt = NULL;
+
+    if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+
+	array_init(return_value);
+    while((ifmt = av_iformat_next(ifmt))) {
+    	const char *s = ifmt->name, *e;
+    	while((e = strchr(s, ','))) {
+    		uint len = (uint) (e - s);
+    		add_next_index_stringl(return_value, s, len, 1);
+    		s = e + 1;
+    	}
+		add_next_index_string(return_value, s, 1);
+    }
+}
+/* }}} */
+
+/* {{{ proto string av_get_decoders(void)
+   Get list of decoders available */
+PHP_FUNCTION(av_get_decoders)
+{
+    AVOutputFormat *ofmt = NULL;
+
+    if (zend_parse_parameters_none() == FAILURE) {
+		return;
+	}
+
+	array_init(return_value);
+    while((ofmt = av_oformat_next(ofmt))) {
+    	const char *s = ofmt->name, *e;
+    	while((e = strchr(s, ','))) {
+    		uint len = (uint) (e - s);
+    		add_next_index_stringl(return_value, s, len, 1);
+    		s = e + 1;
+    	}
+		add_next_index_string(return_value, s, 1);
+    }
+}
+/* }}} */
 
 /*
  * Local variables:
