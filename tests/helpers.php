@@ -140,4 +140,34 @@ class SineWave {
 	}	
 }
 
+function compareImage($img1, $img2) {
+	$sample1 = imagecreatetruecolor(16, 16);
+	$sample2 = imagecreatetruecolor(16, 16);
+	imagecopyresample($sample1, $img1, 0, 0, 0, 0, 16, 16, imagesx($img1), imagesy($img1));
+	imagecopyresample($sample2, $img2, 0, 0, 0, 0, 16, 16, imagesx($img2), imagesy($img2));
+
+	$diff = 0;
+	for($y = 0; $y < 16; $y++) {
+		for($x = 0; $x < 16; $x++) {
+			$argb1 = imagecolorat($img1, $x, $y);
+			$a1 = ($argb >> 24) & 0xFF;
+			$r1 = ($argb >> 16) & 0xFF;
+			$g1 = ($argb >>  8) & 0xFF;
+			$b1 = ($argb >>  0) & 0xFF;
+
+			$argb2 = imagecolorat($img2, $x, $y);
+			$a2 = ($argb >> 24) & 0xFF;
+			$r2 = ($argb >> 16) & 0xFF;
+			$g2 = ($argb >>  8) & 0xFF;
+			$b2 = ($argb >>  0) & 0xFF;
+
+			$diff += abs($a1 - $a2) / 127;
+			$diff += abs($r1 - $r2) / 255;
+			$diff += abs($g1 - $g2) / 255;
+			$diff += abs($b1 - $b2) / 255;
+		}
+	}
+	return $diff;
+}
+
 ?>
