@@ -2753,7 +2753,7 @@ PHP_FUNCTION(av_stream_close)
    Get list of encoders available */
 PHP_FUNCTION(av_get_encoders)
 {
-	AVCodec *codec = NULL;
+	AVCodec *codec = NULL, *decoder;
 
     if (zend_parse_parameters_none() == FAILURE) {
 		return;
@@ -2763,8 +2763,24 @@ PHP_FUNCTION(av_get_encoders)
 	while((codec = av_codec_next(codec))) {
 		if(av_codec_is_encoder(codec)) {
 			add_next_index_string(return_value, codec->name, 1);
+
 			if(strncmp(codec->name, "lib", 3) == 0) {
+				// codec is available without the prefix
 				add_next_index_string(return_value, codec->name + 3, 1);
+			}
+
+			decoder = NULL;
+			while((decoder = av_codec_next(decoder))) {
+				if(decoder->id == codec->id && decoder != codec) {
+					if(av_codec_is_decoder(decoder)) {
+						// see if the decoder has a different name
+						if(strcmp(codec->name, decoder->name) != 0) {
+							// make the encoder available under the name of the decoder as well
+							add_next_index_string(return_value, decoder->name, 1);
+						}
+						break;
+					}
+				}
 			}
 		}
 	}
