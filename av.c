@@ -2741,15 +2741,15 @@ PHP_FUNCTION(av_stream_close)
    Get list of encoders available */
 PHP_FUNCTION(av_get_encoders)
 {
-    AVInputFormat *ifmt = NULL;
+    AVOutputFormat *ofmt = NULL;
 
     if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
 
 	array_init(return_value);
-    while((ifmt = av_iformat_next(ifmt))) {
-    	const char *s = ifmt->name, *e;
+    while((ofmt = av_oformat_next(ofmt))) {
+    	const char *s = ofmt->name, *e;
     	while((e = strchr(s, ','))) {
     		uint len = (uint) (e - s);
     		add_next_index_stringl(return_value, s, len, 1);
@@ -2764,15 +2764,15 @@ PHP_FUNCTION(av_get_encoders)
    Get list of decoders available */
 PHP_FUNCTION(av_get_decoders)
 {
-    AVOutputFormat *ofmt = NULL;
+    AVInputFormat *ifmt = NULL;
 
     if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
 
 	array_init(return_value);
-    while((ofmt = av_oformat_next(ofmt))) {
-    	const char *s = ofmt->name, *e;
+    while((ifmt = av_iformat_next(ifmt))) {
+    	const char *s = ifmt->name, *e;
     	while((e = strchr(s, ','))) {
     		uint len = (uint) (e - s);
     		add_next_index_stringl(return_value, s, len, 1);
