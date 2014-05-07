@@ -163,7 +163,7 @@ class TestVideo {
 		}
 
 		if(!$file || ($this->hasVideo && !$videoStream) || ($this->hasAudio && !$audioStream)) {
-			throw new Exception("Error opening $path for writing\n");
+			throw new Exception("Error opening {$this->path} for writing\n");
 		}
 
 		if($this->hasVideo) {
@@ -205,7 +205,7 @@ class TestVideo {
 		}
 
 		if(!$file || ($this->hasVideo && !$videoStream) || ($this->hasAudio && !$audioStream)) {
-			throw new Exception("Error opening $path for writing\n");
+			throw new Exception("Error opening {$this->path} for writing\n");
 		}
 
 		if($this->hasVideo) {
