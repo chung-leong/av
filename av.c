@@ -1027,16 +1027,28 @@ static int av_find_codec(const char *short_name, AVCodec **p_enc, AVCodec **p_de
 	int found = FALSE;
 	AVCodec *codec = NULL, *encoder = NULL, *decoder = NULL;
 	while((codec = av_codec_next(codec))) {
+		int match = FALSE;
 		if(av_strcasecmp(short_name, codec->name) == 0) {
+			match = TRUE;
+		} else if(codec->name[0] == 'l' && codec->name[1] == 'i' && codec->name[2] == 'b') {
+			if(av_strcasecmp(short_name, codec->name + 3) == 0) {
+				match = TRUE;
+			}
+		}
+		if(match) {
 			if(av_codec_is_encoder(codec)) {
 				encoder = codec;
 			} else if(av_codec_is_decoder(codec)) {
 				decoder = codec;
 			}
 			found = TRUE;
+			if((!p_enc || encoder) && decoder) {
+				break;
+			}
 		}
 	}
-	if(decoder && !encoder) {
+	if(decoder && !encoder && p_enc) {
+		// sometimes the encoder doesn't have the same name
 		codec = NULL;
 		while ((codec = av_codec_next(codec))) {
 			if(codec->id == decoder->id) {
@@ -2741,22 +2753,21 @@ PHP_FUNCTION(av_stream_close)
    Get list of encoders available */
 PHP_FUNCTION(av_get_encoders)
 {
-    AVOutputFormat *ofmt = NULL;
+	AVCodec *codec = NULL;
 
     if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
 
 	array_init(return_value);
-    while((ofmt = av_oformat_next(ofmt))) {
-    	const char *s = ofmt->name, *e;
-    	while((e = strchr(s, ','))) {
-    		uint len = (uint) (e - s);
-    		add_next_index_stringl(return_value, s, len, 1);
-    		s = e + 1;
-    	}
-		add_next_index_string(return_value, s, 1);
-    }
+	while((codec = av_codec_next(codec))) {
+		if(av_codec_is_encoder(codec)) {
+			add_next_index_string(return_value, codec->name, 1);
+			if(strncmp(codec->name, "lib", 3) == 0) {
+				add_next_index_string(return_value, codec->name + 3, 1);
+			}
+		}
+	}
 }
 /* }}} */
 
@@ -2764,22 +2775,21 @@ PHP_FUNCTION(av_get_encoders)
    Get list of decoders available */
 PHP_FUNCTION(av_get_decoders)
 {
-    AVInputFormat *ifmt = NULL;
+	AVCodec *codec = NULL;
 
     if (zend_parse_parameters_none() == FAILURE) {
 		return;
 	}
 
 	array_init(return_value);
-    while((ifmt = av_iformat_next(ifmt))) {
-    	const char *s = ifmt->name, *e;
-    	while((e = strchr(s, ','))) {
-    		uint len = (uint) (e - s);
-    		add_next_index_stringl(return_value, s, len, 1);
-    		s = e + 1;
-    	}
-		add_next_index_string(return_value, s, 1);
-    }
+	while((codec = av_codec_next(codec))) {
+		if(av_codec_is_decoder(codec)) {
+			add_next_index_string(return_value, codec->name, 1);
+			if(strncmp(codec->name, "lib", 3) == 0) {
+				add_next_index_string(return_value, codec->name + 3, 1);
+			}
+		}
+	}
 }
 /* }}} */
 

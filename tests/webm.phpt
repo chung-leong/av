@@ -3,7 +3,7 @@ WebM test
 --SKIPIF--
 <?php 
 	if(!function_exists('imagecreatetruecolor')) print 'skip GD not available';
-	if(!in_array('webm', av_get_encoders())) print 'skip WebM encoder not avilable';
+	if(!in_array('vpx', av_get_encoders())) print 'skip WebM encoder not avilable';
 ?>
 --FILE--
 <?php

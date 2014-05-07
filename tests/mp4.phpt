@@ -3,7 +3,7 @@ MP4 test
 --SKIPIF--
 <?php 
 	if(!function_exists('imagecreatetruecolor')) print 'skip GD not available';
-	if(!in_array('mp4', av_get_encoders())) print 'skip MP4 encoder not avilable';
+	if(!in_array('mpeg4', av_get_encoders())) print 'skip MP4 encoder not avilable';
 ?>
 --FILE--
 <?php

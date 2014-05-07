@@ -3,6 +3,7 @@ Live stream test
 --SKIPIF--
 <?php 
 	if(!function_exists('imagecreatetruecolor')) print 'skip GD not available'; 
+	if(!in_array('wmv3', av_get_decoders())) print 'skip WMV decoder not avilable';
 ?>
 --FILE--
 <?php

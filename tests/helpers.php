@@ -139,40 +139,68 @@ class TestVideo {
 	private $height;
 	private $frameRate;
 	private $duration;
-	private $hasVideo;
-	private $hasAudio;
+	private $videoCodec;
+	private $audioCodec;
+	private $metadata;
 	
-	public function __construct($path, $width, $height, $frameRate, $duration, $hasVideo = true, $hasAudio = true) {
+	public function __construct($path, $width, $height, $frameRate, $duration) {
 		$this->path = $path;
 		$this->width = $width;
 		$this->height = $height;
 		$this->frameRate = $frameRate;
 		$this->duration = $duration;
-		$this->hasVideo = $hasVideo;
-		$this->hasAudio = $hasAudio;
+	}
+	
+	public function setVideoCodec($codec) {
+		$this->videoCodec = $codec;
+	}
+
+	public function setAudioCodec($codec) {
+		$this->audioCodec = $codec;
+	}
+	
+	public function attachMetadata($metadata) {
+		$this->metadata = $metadata;
 	}
 
 	public function create() {
 		// open file for writing
 		$file = av_file_open($this->path, "w");
-		if($this->hasVideo) {
-			$videoStream = av_stream_open($file, "video", array( "width" => $this->width, "height" => $this->height, "frame_rate" => $this->frameRate, "bit_rate" => 1024 * 1000, "gop" => 0));
-		}
-		if($this->hasAudio) {
-			$audioStream = av_stream_open($file, "audio");
+		if($this->videoCodec !== false) {
+			$params = array();
+			$params["width"] = $this->width;
+			$params["height"] = $this->height;
+			$params["frame_rate"] = $this->frameRate;
+			$params["bit_rate"] = 1024000;
+			$params["gop"] = 0;
+			if($this->videoCodec) {
+				$params["codec"] = $this->videoCodec;
+			}
+			$videoStream = av_stream_open($file, "video", $params);
+		} else {
+			$videoStream = false;
+		}		
+		if($this->audioCodec !== false) {
+			$params = array();
+			if($this->audioCodec) {
+				$params["codec"] = $this->audioCodec;
+			}
+			$audioStream = av_stream_open($file, "audio", $params);
+		} else {
+			$audioStream = false;
 		}
 
-		if(!$file || ($this->hasVideo && !$videoStream) || ($this->hasAudio && !$audioStream)) {
-			throw new Exception("Error opening {$this->path} for writing\n");
+		if($file === null|| $videoStream === null || $audioStream === null) {
+			throw new Exception("Error opening {$this->path} for writing");
 		}
 
-		if($this->hasVideo) {
+		if($videoStream) {
 			$animation = new BouncingBallAnimation($this->width, $this->height, $this->frameRate);
 			$videoTime = 0.5 / $this->frameRate;
 		} else {
 			$videoTime = INF;
 		}
-		if($this->hasAudio) {
+		if($audioStream) {
 			$tone = new SineWave;
 			$audioTime = 0;
 		} else {
@@ -197,24 +225,28 @@ class TestVideo {
 	public function verify() {
 		// open file for reading
 		$file = av_file_open($this->path, "r");
-		if($this->hasVideo) {
+		if($this->videoCodec !== false) {
 			$videoStream = av_stream_open($file, "video");
+		} else {
+			$videoStream = false;
 		}
-		if($this->hasAudio) {
+		if($this->audioCodec !== false) {
 			$audioStream = av_stream_open($file, "audio");
+		} else {
+			$audioStream = false;
 		}
 
-		if(!$file || ($this->hasVideo && !$videoStream) || ($this->hasAudio && !$audioStream)) {
-			throw new Exception("Error opening {$this->path} for writing\n");
+		if($file === null|| $videoStream === null || $audioStream === null) {
+			throw new Exception("Error opening {$this->path} for writing");
 		}
 
-		if($this->hasVideo) {
+		if($videoStream) {
 			$animation = new BouncingBallAnimation($this->width, $this->height, $this->frameRate);
 			$videoTime = 0.5 / $this->frameRate;
 		} else {
 			$videoTime = INF;
 		}
-		if($this->hasAudio) {
+		if($audioStream) {
 			$tone = new SineWave;
 			$audioTime = 0;
 		} else {
@@ -235,13 +267,13 @@ class TestVideo {
 						if(abs($this->duration - $videoTime) > 0.1) {
 							imagepng($image1, "{$this->path}.correct.png");
 							imagepng($image2, "{$this->path}.incorrect.png");
-							throw new Exception("Frame at $videoTime is different\n");
+							throw new Exception("Frame at $videoTime is different");
 						}
 					}
 					$animation->advance();
 				} else {
 					if(abs($this->duration - $videoTime) > 0.1) {
-						throw new Exception("Cannot read from video stream\n");
+						throw new Exception("Cannot read from video stream");
 					} else {
 						$videoTime = INF;
 					}
@@ -270,14 +302,14 @@ class TestVideo {
 					$diff = $this->comparePCM($pcm1, $pcm2);
 					if($diff > 1) {
 						if(abs($this->duration - $audioTime) > 0.1) {
-							throw new Exception("Audio at $audioTime is different\n");
+							throw new Exception("Audio at $audioTime is different");
 						}
 					}
 					$pcm1 = substr($pcm1, $len2);
 					$len1 -= $len2;
 				} else {
 					if(abs($this->duration - $audioTime) > 0.1) {
-						throw new Exception("Cannot read from audio stream\n");
+						throw new Exception("Cannot read from audio stream");
 					} else {
 						$audioTime = INF;
 					}

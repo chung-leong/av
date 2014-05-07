@@ -13,7 +13,8 @@ require("helpers.php");
 $folder = dirname(__FILE__);
 $filename = "test.gif";
 
-$testVideo = new TestVideo("$folder/$filename", 640, 480, 24, 5.0, true, false);
+$testVideo = new TestVideo("$folder/$filename", 640, 480, 24, 5.0);
+$testVideo->setAudioCodec(false);
 $testVideo->create();
 $testVideo->verify();
 $testVideo->delete();
