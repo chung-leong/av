@@ -1696,7 +1696,7 @@ ample_fmt",      AV_SAMPLE_FMT_FLT, 0);
 		if(purpose == FOR_ENCODING) {
 			strm->resampler_cxt = av_audio_resample_init(strm->codec_cxt->channels, 2, strm->codec_cxt->sample_rate, 44100, codec_format, AV_SAMPLE_FMT_FLT, 16, 10, 0, 0.8);
 		} else {
-			strm->resampler_cxt =  av_audio_resample_init(2, strm->codec_cxt->channels, 44100, strm->codec_cxt->sample_rate, AV_SAMPLE_FMT_FLT, codec_format, 16, 10, 0, 0.8);
+			strm->resampler_cxt = av_audio_resample_init(2, strm->codec_cxt->channels, 44100, strm->codec_cxt->sample_rate, AV_SAMPLE_FMT_FLT, codec_format, 16, 10, 0, 0.8);
 		}
 #endif
 		if(frame_duration > 0) {
@@ -1767,6 +1767,11 @@ int avcodec_fill_audio_frame(AVFrame *frame, int nb_channels,
 #endif
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
+#if !defined(HAVE_SWRESAMPLE) && !defined(HAVE_AVRESAMPLE)
+	short *dst_buffer;
+	int output_count;
+#endif
+
 	// allocate the audio frame if it's not there
 	if(!(strm->flags & AV_STREAM_AUDIO_BUFFER_ALLOCATED)) {
 		uint32_t buffer_size = av_samples_get_buffer_size(NULL, strm->codec_cxt->channels, strm->codec_cxt->frame_size, strm->codec_cxt->sample_fmt, 1);
@@ -1842,10 +1847,12 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 			}	break;
 			default: break;
 		}
-		audio_resample(strm->resampler_cxt, strm->deplanarized_samples, (short *) strm->samples, strm->sample_count);
+		dst_buffer = (short *) strm->deplanarized_samples;
 	} else {
-		audio_resample(strm->resampler_cxt, (short *) strm->frame->data[0], (short *) strm->samples, strm->sample_count);
+		dst_buffer = (short *) strm->frame->data[0];
 	}
+	output_count = audio_resample(strm->resampler_cxt, dst_buffer, (short *) strm->samples, strm->sample_count);
+	strm->frame->nb_samples = output_count;
 #endif
 }
 

@@ -120,23 +120,8 @@ class SineWave {
 		$this->duration = 1000 / 44100;
 	}
 	
-	public function get($time, $count) {
-		$time = fmod($time, $this->duration);
-		$offset = round($time * 44100) * 2 * 4;
-		$buffer = substr($this->pcm, $offset);
-		$len = strlen($buffer);
-		$avail = strlen($this->pcm);
-		while($len < $count) {
-			$addition = $count - $len;
-			if($addition < $avail) {
-				$buffer .= substr($this->pcm, 0, $addition);
-				$len += $addition;
-			} else {
-				$buffer .= $this->pcm;
-				$len += $avail;
-			}
-		}
-		return $buffer;
+	public function get() {
+		return $this->pcm;
 	}
 
 	public function write($output, &$time) {
@@ -269,6 +254,9 @@ class TestVideo {
 		}
 		
 		$image2 = imagecreatetruecolor($this->width, $this->height);
+		$pcm1 = "";
+		$len1 = 0;
+		$beginning = true;
 
 		while($videoTime < $this->duration || $audioTime < $this->duration) {
 			if($videoTime < $audioTime) {
@@ -306,9 +294,21 @@ class TestVideo {
 							continue;
 						}
 						$pcm2 = substr($pcm2, $offset);
+					} 
+					if($beginning) {
+						if($audioTime > 0) {
+							$timeOffset = fmod($audioTime, 1000 / 44100);
+							$byteOffset = round($timeOffset * 44100) * 2 * 4;
+							$pcm1 = substr($tone->get(), $byteOffset);
+							$len1 = strlen($pcm1);
+						}
+						$beginning = false;
 					}
-					$pcm1 = $tone->get($audioTime, $len2);
-					$len1 = $len2;
+					while($len1 < $len2) {
+						// get another chunk of samples
+						$pcm1 .= $tone->get();
+						$len1 = strlen($pcm1);
+					}
 					$diff = $this->comparePCM($pcm1, $pcm2);
 					if($diff > 1) {
 						if(abs($this->duration - $audioTime) > 0.1) {
