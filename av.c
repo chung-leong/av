@@ -1654,9 +1654,6 @@ static void av_create_picture_and_scaler(av_stream *strm, uint32_t width, uint32
 static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
 		double frame_duration = (double) strm->codec_cxt->frame_size / strm->codec_cxt->sample_rate;
-		if(frame_duration == 0) {
-			frame_duration = 0.1;
-		}
 
 #if defined(HAVE_SWRESAMPLE)
 		if(purpose == FOR_ENCODING) {
@@ -1702,8 +1699,14 @@ ample_fmt",      AV_SAMPLE_FMT_FLT, 0);
 			strm->resampler_cxt =  av_audio_resample_init(2, strm->codec_cxt->channels, 44100, strm->codec_cxt->sample_rate, AV_SAMPLE_FMT_FLT, codec_format, 16, 10, 0, 0.8);
 		}
 #endif
-		strm->sample_buffer_size = (uint32_t) (frame_duration * 44100);
-		strm->samples = emalloc(sizeof(float) * strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE);
+		if(frame_duration > 0) {
+			if(purpose == FOR_ENCODING) {
+				strm->sample_buffer_size = (uint32_t) floor(frame_duration * 44100);
+			} else {
+				strm->sample_buffer_size = (uint32_t) ceil(frame_duration * 44100);
+			}
+			strm->samples = emalloc(sizeof(float) * (strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE));
+		}
 	}
 }
 
@@ -1847,6 +1850,11 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 }
 
 static void av_transfer_pcm_from_frame(av_stream *strm) {
+	uint32_t sample_count = (uint32_t) ceil(strm->frame_duration * 44100);
+	if(strm->sample_buffer_size < sample_count) {
+		strm->sample_buffer_size = sample_count;
+		strm->samples = erealloc(strm->samples, sizeof(float) * (strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE));
+	}
 #if defined(HAVE_SWRESAMPLE)
 	strm->sample_count = swr_convert(strm->resampler_cxt, (uint8_t **) &strm->samples, strm->sample_buffer_size, (const uint8_t **) strm->frame->data, strm->frame->nb_samples);
 #elif defined(HAVE_AVRESAMPLE)
@@ -1916,11 +1924,6 @@ static void av_transfer_pcm_from_frame(av_stream *strm) {
 		src_buffer = strm->deplanarized_samples;
 	} else {
 		src_buffer = (short *) strm->frame->data[0];
-	}
-
-	if(strm->sample_buffer_size < strm->frame->nb_samples) {
-		strm->sample_buffer_size = strm->frame->nb_samples;
-		strm->samples = erealloc(strm->samples, sizeof(float) * (strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE));
 	}
 	strm->sample_count = audio_resample(strm->resampler_cxt, (short *) strm->samples, src_buffer, strm->frame->nb_samples);
 #endif
@@ -2383,7 +2386,7 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 			Z_TYPE_P(buffer) = IS_STRING;
 			Z_STRVAL_P(buffer) = data;
 		} else {
-			data = Z_STRLEN_P(buffer);
+			data = Z_STRVAL_P(buffer);
 		}
 		Z_STRLEN_P(buffer) = data_len;
 		memcpy(data, strm->samples, data_len);
