@@ -1654,6 +1654,9 @@ static void av_create_picture_and_scaler(av_stream *strm, uint32_t width, uint32
 static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 	if(!strm->samples) {
 		double frame_duration = (double) strm->codec_cxt->frame_size / strm->codec_cxt->sample_rate;
+		if(frame_duration == 0) {
+			frame_duration = 0.1;
+		}
 
 #if defined(HAVE_SWRESAMPLE)
 		if(purpose == FOR_ENCODING) {
@@ -1669,7 +1672,9 @@ static void av_create_audio_buffer_and_resampler(av_stream *strm, int purpose) {
 			 av_opt_set_int(strm->resampler_cxt, "out_sample_fmt",     strm->codec_cxt->sample_fmt, 0);
 			 av_opt_set_int(strm->resampler_cxt, "out_sample_rate",    strm->codec_cxt->sample_rate, 0);
 			 av_opt_set_int(strm->resampler_cxt, "in_channel_layout",  AV_CH_LAYOUT_STEREO, 0);
-			 av_opt_set_int(strm->resampler_cxt, "in_sample_fmt",      AV_SAMPLE_FMT_FLT, 0);
+			 av_opt_set_int(strm->resampler_cxt, "in_s		strm->sample_buffer_size = (uint32_t) (frame_duration * 44100);
+		strm->samples = emalloc(sizeof(float) * (strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE));
+ample_fmt",      AV_SAMPLE_FMT_FLT, 0);
 			 av_opt_set_int(strm->resampler_cxt, "in_sample_rate",     44100, 0);
 		} else {
 			 av_opt_set_int(strm->resampler_cxt, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
@@ -1912,6 +1917,11 @@ static void av_transfer_pcm_from_frame(av_stream *strm) {
 		src_buffer = strm->deplanarized_samples;
 	} else {
 		src_buffer = (short *) strm->frame->data[0];
+	}
+
+	if(strm->sample_buffer_size < strm->frame->nb_samples) {
+		strm->sample_buffer_size = strm->frame->nb_samples;
+		strm->samples = erealloc(strm->samples, sizeof(float) * (strm->sample_buffer_size * 2 + FF_INPUT_BUFFER_PADDING_SIZE));
 	}
 	strm->sample_count = audio_resample(strm->resampler_cxt, (short *) strm->samples, src_buffer, strm->frame->nb_samples);
 #endif
@@ -2351,6 +2361,7 @@ static int av_encode_pcm_from_zval(av_stream *strm, zval *buffer, double time TS
 static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time TSRMLS_DC) {
 	if(av_decode_next_frame(strm, p_time TSRMLS_CC)) {
 		int data_len;
+		char *data;
 
 		av_create_audio_buffer_and_resampler(strm, FOR_DECODING);
 		av_transfer_pcm_from_frame(strm);
@@ -2358,12 +2369,15 @@ static int av_decode_pcm_to_zval(av_stream *strm, zval *buffer, double *p_time T
 		data_len = sizeof(float) * 2 * strm->sample_count;
 		if(Z_TYPE_P(buffer) != IS_STRING || Z_STRLEN_P(buffer) < data_len) {
 			zval_dtor(buffer);
+			data = emalloc(data_len + 1);
 			Z_TYPE_P(buffer) = IS_STRING;
-			Z_STRVAL_P(buffer) = emalloc(data_len + 1);
+			Z_STRVAL_P(buffer) = data;
+		} else {
+			data = Z_STRLEN_P(buffer);
 		}
 		Z_STRLEN_P(buffer) = data_len;
-		memcpy(Z_STRVAL_P(buffer), strm->samples, data_len);
-		Z_STRVAL_P(buffer)[data_len] = '\0';
+		memcpy(data, strm->samples, data_len);
+		data[data_len] = '\0';
 		return TRUE;
 	} else {
 		zval_dtor(buffer);

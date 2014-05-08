@@ -13,7 +13,6 @@ $folder = dirname(__FILE__);
 $filename = "test.ogg";
 
 $testVideo = new TestVideo("$folder/$filename", 640, 480, 24, 5.0);
-$testVideo->setAudioCodec('vorbis');
 $testVideo->setVideoCodec(false);
 $testVideo->create();
 $testVideo->verify();
