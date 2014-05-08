@@ -993,14 +993,18 @@ PHP_FUNCTION(av_file_optimize)
 static int av_stream_get_buffer2(AVCodecContext *c, AVFrame *pic, int flags) {
 	av_stream *strm = c->opaque;
 	int ret = avcodec_default_get_buffer2(c, pic, flags);
-	strm->frame_pts = strm->packet->pts;
+	if(strm->frame_pts == AV_NOPTS_VALUE) {
+		strm->frame_pts = strm->packet->pts;
+	}
 	return ret;
 }
 #else
 static int av_stream_get_buffer(AVCodecContext *c, AVFrame *pic) {
 	av_stream *strm = c->opaque;
 	int ret = avcodec_default_get_buffer(c, pic);
-	strm->frame_pts = strm->packet->pts;
+	if(strm->frame_pts == AV_NOPTS_VALUE) {
+		strm->frame_pts = strm->packet->pts;
+	}
 	return ret;
 }
 #endif
@@ -1767,9 +1771,9 @@ int avcodec_fill_audio_frame(AVFrame *frame, int nb_channels,
 #endif
 
 static void av_transfer_pcm_to_frame(av_stream *strm) {
+	int output_count;
 #if !defined(HAVE_SWRESAMPLE) && !defined(HAVE_AVRESAMPLE)
 	short *dst_buffer;
-	int output_count;
 #endif
 
 	// allocate the audio frame if it's not there
@@ -1783,7 +1787,7 @@ static void av_transfer_pcm_to_frame(av_stream *strm) {
 		strm->flags |= AV_STREAM_AUDIO_BUFFER_ALLOCATED;
 	}
 #if defined(HAVE_SWRESAMPLE)
-	swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_count);
+	output_count = swr_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, strm->frame->nb_samples, (const uint8_t **) &strm->samples, strm->sample_count);
 #elif defined(HAVE_AVRESAMPLE)
 	avresample_convert(strm->resampler_cxt, (uint8_t **) strm->frame->data, 0, strm->frame->nb_samples, (uint8_t **) &strm->samples, 0, strm->sample_count);
 #else
@@ -2098,6 +2102,8 @@ static int av_encode_next_frame(av_stream *strm, double time) {
 
 static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, double *p_time TSRMLS_DC) {
 	int frame_finished = FALSE;
+	strm->frame_pts = AV_NOPTS_VALUE;
+
 	for(;;) {
 		int bytes_decoded;
 		if(av_read_next_packet(strm TSRMLS_CC)) {
@@ -2122,14 +2128,14 @@ static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, doubl
 		if(frame_finished) {
 			int64_t time_stamp = 0;
 			if(strm->packet) {
-				// use the packet's dts if it's available; otherwise
 				// use the pts of the packet that triggered the creation
-				// of the frame; the timestamp is the number of
+				// of the frame; if none, use the packet's dts  
+				// the timestamp is the number of
 				// time-united employed in the stream
-				if(strm->packet->dts != AV_NOPTS_VALUE) {
-					time_stamp = strm->packet->dts;
-				} else if(strm->frame_pts != AV_NOPTS_VALUE) {
+				if(strm->frame_pts != AV_NOPTS_VALUE) {
 					time_stamp = strm->frame_pts;
+				} else if(strm->packet->dts != AV_NOPTS_VALUE) {
+					time_stamp = strm->packet->dts;
 				} else {
 					time_stamp = AV_NOPTS_VALUE;
 				}
