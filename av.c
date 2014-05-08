@@ -1697,7 +1697,6 @@ ample_fmt",      AV_SAMPLE_FMT_FLT, 0);
 			codec_format = strm->codec_cxt->sample_fmt;
 		}
 		if(purpose == FOR_ENCODING) {
-			// cleong: I have no idea what the last four parameters do; using values that came up in Google
 			strm->resampler_cxt = av_audio_resample_init(strm->codec_cxt->channels, 2, strm->codec_cxt->sample_rate, 44100, codec_format, AV_SAMPLE_FMT_FLT, 16, 10, 0, 0.8);
 		} else {
 			strm->resampler_cxt =  av_audio_resample_init(2, strm->codec_cxt->channels, 44100, strm->codec_cxt->sample_rate, AV_SAMPLE_FMT_FLT, codec_format, 16, 10, 0, 0.8);
@@ -2121,9 +2120,20 @@ static int av_decode_frame_at_cursor(av_stream *strm, AVFrame *dest_frame, doubl
 					time_stamp = strm->packet->dts;
 				} else if(strm->frame_pts != AV_NOPTS_VALUE) {
 					time_stamp = strm->frame_pts;
+				} else {
+					time_stamp = AV_NOPTS_VALUE;
 				}
 			}
-			*p_time = time_stamp * av_q2d(strm->stream->time_base);
+			if(time_stamp != AV_NOPTS_VALUE) {
+				*p_time = strm->next_frame_time = time_stamp * av_q2d(strm->stream->time_base);
+			} else {
+				*p_time = strm->next_frame_time;
+			}
+
+			if(strm->codec->type == AVMEDIA_TYPE_AUDIO) {
+				strm->frame_duration = (double) dest_frame->nb_samples / strm->codec_cxt->sample_rate;
+			}
+			strm->next_frame_time += strm->frame_duration;
 			break;
 		}
 	}

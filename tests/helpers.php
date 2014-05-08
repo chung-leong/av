@@ -107,7 +107,7 @@ class SineWave {
 	private $pcm;
 	private $duration;
 
-	public function __construct($amplitude = 0.25) {
+	public function __construct($amplitude = 1) {
 		// 100 stero samples comprising a sin wave at 441 hertz
 		$samples = "";
 		for($i = 0; $i < 100; $i++) {
@@ -366,7 +366,7 @@ class TestVideo {
 			$float1 = $array1[$i];
 			$float2 = $array2[$i];
 			$diff += abs($float1 - $float2);
-		}	
+		}
 		return $diff / 50;
 	}
 }
