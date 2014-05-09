@@ -295,15 +295,6 @@ class TestVideo {
 						}
 						$pcm2 = substr($pcm2, $offset);
 					} 
-					if($beginning) {
-						if($audioTime > 0) {
-							$timeOffset = fmod($audioTime, 1000 / 44100);
-							$byteOffset = round($timeOffset * 44100) * 2 * 4;
-							$pcm1 = substr($tone->get(), $byteOffset);
-							$len1 = strlen($pcm1);
-						}
-						$beginning = false;
-					}
 					while($len1 < $len2) {
 						// get another chunk of samples
 						$pcm1 .= $tone->get();

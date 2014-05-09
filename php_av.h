@@ -108,8 +108,13 @@ struct av_stream {
 #elif defined(HAVE_AVRESAMPLE)
 	AVAudioResampleContext * resampler_cxt;
 #else
-	short *deplanarized_samples;		// buffer for planar to interleave conversion
 	ReSampleContext *resampler_cxt;		// resampler context
+	uint8_t *resampler_queue;
+	uint32_t resampler_queue_length;
+	uint32_t resampler_extra_sample_count;
+	uint32_t source_sample_size;
+	uint32_t target_sample_size;
+	int32_t deinterleave;
 #endif
 
 	AVSubtitle *subtitle;
